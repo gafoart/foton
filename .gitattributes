@@ -1,0 +1,54 @@
+# Default: identify text by content; commit with LF, check out as-is in each
+# OS's working tree (so editors that respect newlines see what they expect).
+* text=auto
+
+# Source code & config — always LF in the working tree on every OS so a
+# Windows checkout doesn't reformat the file the macOS checkout produced.
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.json      text eol=lf
+*.jsonc     text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.svg       text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+*.sh        text eol=lf
+.gitignore  text eol=lf
+.gitattributes text eol=lf
+.env*       text eol=lf
+
+# Windows-native scripts must keep CRLF or cmd.exe / PowerShell may misparse.
+*.ps1       text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+
+# Binaries — tell Git not to munge or diff them.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.pdf       binary
+*.glb       binary
+*.gltf      binary
+*.ply       binary
+*.spz       binary
+*.splat     binary
+*.ksplat    binary
+*.sog       binary
+*.sogs      binary
+*.zip       binary
+*.wasm      binary
+*.ai        binary
+*.psd       binary
+*.fig       binary
+
+# Lockfile is text but very large — collapse in diffs by default.
+pnpm-lock.yaml -diff merge=binary linguist-generated=true

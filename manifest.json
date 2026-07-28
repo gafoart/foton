@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "defaults": {
+    "modelId": "alsvin",
+    "colorId": "blanco",
+    "view": "exterior"
+  },
+  "models": [
+    {
+      "id": "alsvin",
+      "name": "Changan Alsvin",
+      "colors": [
+        {
+          "id": "blanco",
+          "name": "Blanco",
+          "assets": {
+            "exterior": {
+              "url": "/splats/Alsvin_blanco.sog",
+              "fileType": "zip",
+              "transform": {
+                "pos": [
+                  -0.007109588180381654,
+                  0.16465281097196,
+                  0
+                ],
+                "rot": [
+                  0,
+                  0,
+                  1,
+                  6.123233995736766e-17
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "pivot": [
+                  0,
+                  0,
+                  0
+                ],
+                "pivotRot": [
+                  0,
+                  0,
+                  0,
+                  1
+                ]
+              }
+            },
+            "detail": {
+              "url": "/splats/Motor_trunk.sog",
+              "fileType": "zip",
+              "transform": {
+                "pos": [
+                  0,
+                  1.2289758054641216,
+                  -0.5118964660117256
+                ],
+                "rot": [
+                  0.04353220379509236,
+                  2.6655787018745054e-18,
+                  0.9990520242873955,
+                  6.117429318626213e-17
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "interior": {
+        "url": "/splats/Alsvin_interior.sog",
+        "fileType": "zip",
+        "transform": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "rot": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": 1
+        }
+      },
+      "bookmarks": {
+        "exterior": {
+          "pos": [
+            0,
+            0.5,
+            1.5
+          ],
+          "target": [
+            0,
+            0,
+            -0.8
+          ]
+        },
+        "detail": {
+          "pos": [
+            0,
+            0.3,
+            -1.5
+          ],
+          "target": [
+            0,
+            0,
+            -0.8
+          ]
+        },
+        "interior": {
+          "pos": [
+            0,
+            0.25,
+            -0.5
+          ],
+          "target": [
+            0,
+            0,
+            -0.8
+          ]
+        }
+      },
+      "annotations": [
+        {
+          "id": "ann-alsvin-ext",
+          "view": "exterior",
+          "pos": [
+            0,
+            0.3,
+            -0.8
+          ],
+          "text": "Changan Alsvin"
+        }
+      ]
+    }
+  ]
+}

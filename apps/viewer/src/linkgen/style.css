@@ -1,0 +1,395 @@
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/lato-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/lato-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0e0e10;
+  color: #f4f4f5;
+  font-family: "Lato", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+a {
+  color: #fff;
+}
+
+.linkgen-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.linkgen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.linkgen-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.linkgen-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: rgba(244, 244, 245, 0.6);
+}
+
+.linkgen-nav {
+  display: inline-flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.linkgen-back {
+  text-decoration: none;
+  color: rgba(244, 244, 245, 0.7);
+  font-size: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 0.5rem 0.95rem;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
+  white-space: nowrap;
+}
+.linkgen-back:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.linkgen-section {
+  background: rgba(28, 28, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.linkgen-section-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(244, 244, 245, 0.55);
+  margin: 0 0 0.85rem;
+  font-weight: 700;
+}
+
+/* Model thumbnails */
+.linkgen-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.linkgen-model-card {
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease;
+  font-family: inherit;
+  color: inherit;
+}
+.linkgen-model-card:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.5);
+}
+.linkgen-model-card.selected {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+.linkgen-model-card img {
+  width: 100%;
+  height: 70px;
+  object-fit: contain;
+  margin-bottom: 0.45rem;
+}
+.linkgen-model-card .name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* Color dots — mirror the showroom-color-dot style from the viewer */
+.linkgen-color-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.linkgen-color-dot {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  padding: 0;
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.linkgen-color-dot:hover:not(:disabled) {
+  transform: scale(1.06);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+.linkgen-color-dot.selected {
+  border-color: #fff;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 4px 18px rgba(0, 0, 0, 0.5),
+    0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+.linkgen-color-dot:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* Pill toggles (view, load scope) */
+.linkgen-pill-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.linkgen-pill {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(244, 244, 245, 0.85);
+  padding: 0.55rem 1.05rem;
+  border-radius: 999px;
+  font-size: 0.825rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.linkgen-pill:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+.linkgen-pill.selected {
+  background: #fff;
+  color: #0e0e10;
+  border-color: #fff;
+}
+
+/* Checkboxes */
+.linkgen-check-row {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.linkgen-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  user-select: none;
+}
+.linkgen-check input {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  position: relative;
+  margin: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.linkgen-check input:checked {
+  background: #fff;
+  border-color: #fff;
+}
+.linkgen-check input:checked::after {
+  content: "";
+  position: absolute;
+  inset: 3px 4px 4px 3px;
+  border-right: 2px solid #0e0e10;
+  border-bottom: 2px solid #0e0e10;
+  transform: rotate(45deg);
+  width: 4px;
+  height: 8px;
+  top: 1px;
+  left: 5px;
+}
+
+/* Labeled field (used by the fondo dropdown) */
+.linkgen-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+  max-width: 380px;
+}
+.linkgen-field-label {
+  font-size: 0.8rem;
+  color: rgba(244, 244, 245, 0.7);
+}
+.linkgen-select {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
+  color: #f4f4f5;
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  /* Caret using CSS only — no extra asset */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'><path d='M1 1.5L6 6.5L11 1.5' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  padding-right: 2.25rem;
+  transition: border-color 0.15s ease;
+}
+.linkgen-select:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.linkgen-select option {
+  background: #1c1c1e;
+  color: #f4f4f5;
+}
+
+/* Domain field */
+.linkgen-domain-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  color: #f4f4f5;
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.linkgen-domain-input:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Final URL output */
+.linkgen-output {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+  margin-top: 0.4rem;
+}
+.linkgen-output-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 0.75rem 0.95rem;
+  color: #fff;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.88rem;
+  outline: none;
+  user-select: all;
+}
+.linkgen-copy-btn {
+  background: #fff;
+  color: #0e0e10;
+  border: none;
+  border-radius: 10px;
+  padding: 0 1.15rem;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.18s ease;
+  min-width: 110px;
+}
+.linkgen-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.88);
+}
+.linkgen-copy-btn:active {
+  transform: scale(0.97);
+}
+.linkgen-copy-btn.copied {
+  background: #4ade80;
+  color: #0e0e10;
+}
+
+.linkgen-preview-link {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(244, 244, 245, 0.7);
+}
+.linkgen-preview-link a {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.linkgen-error {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 520px) {
+  .linkgen-shell {
+    padding: 1.5rem 1rem 3rem;
+  }
+  .linkgen-output {
+    flex-direction: column;
+  }
+  .linkgen-copy-btn {
+    padding: 0.7rem 1rem;
+  }
+}

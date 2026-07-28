@@ -1,0 +1,28 @@
+node_modules
+dist
+**/_worker.bundle
+*.local
+.DS_Store
+._*
+.env
+.env.*.local
+.dev.vars
+.dev.vars.*
+*.tsbuildinfo
+.cursor/
+.claude/
+.shim/
+appsBKP/
+
+# URL/IP local para probar el viewer en el móvil (no commitear)
+apps/viewer/DEV_MOBILE.txt
+
+# 3DGS binaries — not in Git; canonical copy on Cloudflare R2 (see assets/splats/README.md)
+assets/splats/**/*.sog
+assets/splats/**/*.ply
+
+# Feedback capture (?test=1) dev uploads served by Vite middleware; production uses R2.
+apps/viewer/public/feedback/
+
+# Dev-only chat profile data (avatar + settings); production uses KV.
+apps/viewer/.dev-data/

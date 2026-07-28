@@ -1,0 +1,26 @@
+# Cloudflare Pages + Functions. KV namespace "spark-viewer-manifest" (dashboard / MCP).
+# Git build: set "Wrangler configuration" path to this file if the Pages root is the monorepo root.
+# Bindings: dashboard → project → Settings → Functions → KV → variable name MANIFEST_KV → this namespace.
+
+name = "changan-showroom"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "MANIFEST_KV"
+id = "0f0f413e1fcf40efa2470c35507be1d2"
+
+# Feedback capture (?test=1) writes captured screenshots / videos here.
+# Bucket can be the existing splats bucket (`changan`) under `feedback/` prefix,
+# or a dedicated bucket. The Notion page links the file as an external URL, so
+# the bucket needs a public-readable surface (R2 dev URL or custom domain) —
+# set `R2_PUBLIC_BASE_URL` accordingly (e.g. https://changan.r2.dev).
+[[r2_buckets]]
+binding = "FEEDBACK_R2"
+bucket_name = "changan"
+
+# Splats served through /r2/* Pages Function for edge-cache + same-origin loading.
+# Public r2.dev URLs have no CDN caching; this proxy fronts them with caches.default.
+[[r2_buckets]]
+binding = "SPLATS_R2"
+bucket_name = "changan"

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Showroom Changan — Manual del Proyecto</title>
+    <meta
+      name="description"
+      content="Resumen del proyecto Showroom Changan: tecnología 3DGS, optimización de streaming y herramientas de gestión."
+    />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/lato-400.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/lato-700.woff2" crossorigin />
+  </head>
+  <body>
+    <main class="product-shell">
+      <header class="product-hero">
+        <p class="product-eyebrow">Manual del Proyecto</p>
+        <h1 class="product-title">Showroom Changan</h1>
+        <p class="product-lede">
+          Una sala de exhibición virtual de los vehículos Changan,
+          reconstruidos a partir de capturas reales con tecnología 3D Gaussian
+          Splatting y entregados al cliente como una experiencia web
+          interactiva.
+        </p>
+      </header>
+
+      <section class="product-section">
+        <h2 class="product-section-title">¿De qué se trata?</h2>
+        <p>
+          Esta plataforma permite a un cliente recorrer la flota Changan desde
+          su navegador (móvil o escritorio) sin descargar una app. Cada modelo
+          se puede ver desde múltiples ángulos —exterior, motor, baúl,
+          interior— y cambiar de color en tiempo real. Un asistente de IA
+          integrado responde preguntas sobre cada vehículo con información
+          oficial del fabricante.
+        </p>
+        <p>
+          Se incluyen seis modelos: Alsvin, CS35, CS55, CS95, Hunter y Hunter
+          Plus. La aplicación es responsiva y está diseñada para venta
+          asistida en concesionario y para compartirse por enlace en redes
+          sociales o mensajería.
+        </p>
+      </section>
+
+      <section class="product-section">
+        <h2 class="product-section-title">¿Qué es 3DGS?</h2>
+        <p>
+          <strong>3D Gaussian Splatting</strong> es una técnica de
+          reconstrucción 3D introducida en 2023 que representa una escena con
+          millones de pequeñas elipsoides orientadas en el espacio (los
+          “splats”). Cada splat tiene posición, orientación, color y
+          opacidad, y cuando se renderizan todas juntas el resultado es
+          visualmente indistinguible de una fotografía.
+        </p>
+        <p>
+          A diferencia de la geometría tradicional (mallas + texturas),
+          3DGS no requiere modelar a mano: los vehículos se capturan con un
+          recorrido fotográfico, se procesan en pipelines de reconstrucción
+          y producen un archivo compacto que se carga directamente en el
+          navegador. Esto permite mostrar reflejos sobre la carrocería, vidrios
+          translúcidos y detalles imposibles de recrear manualmente.
+        </p>
+      </section>
+
+      <section class="product-section">
+        <h2 class="product-section-title">Optimización del streaming</h2>
+        <p>
+          Cada vehículo pesa entre 5 y 15 MB en su versión móvil. Cargar
+          eso desde una conexión 4G en menos de tres segundos exigió varias
+          capas de optimización:
+        </p>
+        <ul class="product-list">
+          <li>
+            <strong>Proxy R2 con caché de borde.</strong> Los splats viven en
+            Cloudflare R2; la aplicación los sirve a través de un endpoint
+            propio (<code>/r2/...</code>) que los cachea en la red de Cloudflare
+            cerca del usuario y evita una segunda negociación de dominio.
+          </li>
+          <li>
+            <strong>Versionado de caché.</strong> Cuando se reemplaza un
+            archivo en R2, se incrementa la clave de versión y todas las copias
+            cacheadas se invalidan a la próxima petición.
+          </li>
+          <li>
+            <strong>Manifest inline en el HTML.</strong> El servidor inyecta el
+            JSON del manifest dentro del documento HTML inicial: la app no
+            necesita una segunda petición para saber qué cargar.
+          </li>
+          <li>
+            <strong>Code-splitting.</strong> El chatbot y el capturador de
+            feedback se cargan bajo demanda, no en el bundle inicial.
+          </li>
+          <li>
+            <strong>Fuentes self-hosted.</strong> Lato se sirve desde el mismo
+            dominio: sin handshake adicional contra Google Fonts.
+          </li>
+          <li>
+            <strong>Pre-carga inteligente.</strong> En cuanto la app sabe qué
+            modelo abrir, dispara la descarga del exterior en paralelo con el
+            arranque del motor 3D. En escritorio, los demás colores se
+            precargan en segundo plano.
+          </li>
+          <li>
+            <strong>Modo móvil tolerante a memoria.</strong> Caché LRU más
+            pequeño, sin precarga de colores y limpieza al perder visibilidad
+            para sobrevivir a sesiones largas en iOS Safari.
+          </li>
+          <li>
+            <strong>Persistencia local.</strong> El último modelo, color y
+            ángulo se guardan en el navegador 24 h: si la pestaña se
+            recarga (por OOM en móvil, por ejemplo), el cliente vuelve al mismo
+            punto.
+          </li>
+          <li>
+            <strong>Aislamiento de origen (COOP/COEP).</strong> Cabeceras de
+            cross-origin que permiten al motor de WebGL usar memoria
+            compartida sin comprometer la seguridad del navegador.
+          </li>
+        </ul>
+        <p>
+          El resultado: el primer modelo aparece típicamente en
+          <strong>menos de 2 segundos</strong> en escritorio y
+          <strong>menos de 3 segundos</strong> en móvil 4G, con cambios de
+          color y ángulo prácticamente instantáneos a partir de ese punto.
+        </p>
+      </section>
+
+      <section class="product-section product-tools">
+        <h2 class="product-section-title">Herramientas</h2>
+        <p class="product-section-sub">
+          Accesos rápidos a las distintas partes del proyecto.
+        </p>
+        <div class="product-card-grid">
+          <a class="product-card" href="https://changan.thecreativecomputing.com/" target="_blank" rel="noopener">
+            <div class="product-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 11.5L12 4l9 7.5" />
+                <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" />
+              </svg>
+            </div>
+            <h3 class="product-card-title">Showroom</h3>
+            <p class="product-card-desc">
+              changan.thecreativecomputing.com — la experiencia principal para
+              el cliente final.
+            </p>
+          </a>
+
+          <a class="product-card" href="/linkgen">
+            <div class="product-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07L11.5 4.43" />
+                <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07L12.5 19.57" />
+              </svg>
+            </div>
+            <h3 class="product-card-title">Generador de Enlaces</h3>
+            <p class="product-card-desc">
+              Crea enlaces directos a un modelo, color y vista específicos
+              para compartir con clientes o redes.
+            </p>
+          </a>
+
+          <a class="product-card" href="/ia">
+            <div class="product-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="6" width="16" height="14" rx="2" />
+                <path d="M9 3v3M15 3v3M4 11h16" />
+                <circle cx="9" cy="15" r="1" />
+                <circle cx="15" cy="15" r="1" />
+              </svg>
+            </div>
+            <h3 class="product-card-title">Editor de IA</h3>
+            <p class="product-card-desc">
+              Edita los archivos de entrenamiento del asistente para cada
+              vehículo y para Changan en general.
+            </p>
+          </a>
+        </div>
+      </section>
+
+      <footer class="product-footer">
+        <p>
+          Showroom Changan · Producido por
+          <a href="https://thecreativecomputing.com/" target="_blank" rel="noopener">The Creative Computing</a>
+        </p>
+      </footer>
+    </main>
+    <script type="module" src="/src/product/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# Hashed bundle files — Vite content-hashes the filename, so the body is
+# immutable for the lifetime of that filename. Long-lived browser cache
+# eliminates the must-revalidate roundtrip on every repeat visit.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Self-hosted fonts — filenames aren't content-hashed but the files won't
+# change without a deliberate bump. Long cache without `immutable` so a
+# future replacement can still be revalidated if needed.
+/fonts/*
+  Cache-Control: public, max-age=31536000
