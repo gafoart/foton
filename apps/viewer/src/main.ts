@@ -90,10 +90,11 @@ appRoot.appendChild(viewerStage);
 const canvas = document.createElement("canvas");
 viewerStage.appendChild(canvas);
 
-// "Volver" — top-left link back to the Changan Venezuela showroom site.
+// "Volver" — top-left link back to the Foton showroom landing (update the
+// href when the brand site URL exists).
 const backLink = document.createElement("a");
 backLink.className = "showroom-back-btn";
-backLink.href = "https://changanvzla.com/showroom/";
+backLink.href = "/";
 backLink.setAttribute("aria-label", "Volver");
 backLink.innerHTML =
   '<svg class="showroom-back-btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg><span class="showroom-back-btn-label">Volver</span>';

@@ -14,7 +14,7 @@ import { withCors, corsPreflightHeaders, type EnvWithCors } from "../lib/cors.js
  * Required secrets / vars (set via `wrangler pages secret put` or dashboard):
  *   - NOTION_TOKEN              — internal integration token
  *   - NOTION_DATABASE_ID        — defaults to the hardcoded DB id below
- *   - R2_PUBLIC_BASE_URL        — e.g. https://changan.r2.dev (no trailing slash)
+ *   - R2_PUBLIC_BASE_URL        — e.g. https://pub-57dba95d5e42405eb49421305a3d16c3.r2.dev (no trailing slash)
  *
  * Bindings (in wrangler.toml):
  *   - FEEDBACK_R2 → R2 bucket

@@ -3,8 +3,8 @@
  *
  * Env contract:
  *   - RESEND_API_KEY — `re_…` API key from resend.com → API Keys.
- *   - EMAIL_FROM — either a bare address (`noreply@changa.example.com`) or
- *     a name-formatted address (`Showroom Changan <noreply@…>`). Domain
+ *   - EMAIL_FROM — either a bare address (`noreply@example.com`) or
+ *     a name-formatted address (`Showroom Foton <noreply@…>`). Domain
  *     must be verified on Resend, otherwise use `onboarding@resend.dev`
  *     (sandbox: only delivers to the Resend account owner's address).
  */
@@ -69,7 +69,7 @@ export function buildVerificationEmail(opts: {
   const link = `${opts.origin}/auth/verify?token=${encodeURIComponent(opts.token)}`;
   const safeEmail = htmlEscape(opts.email);
   const safeLink = htmlEscape(link);
-  const subject = "Confirma tu correo — Showroom Changan";
+  const subject = "Confirma tu correo — Showroom Foton";
   const html = `<!DOCTYPE html>
 <html lang="es">
 <body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1c;">
@@ -78,7 +78,7 @@ export function buildVerificationEmail(opts: {
       <td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#fff;border-radius:14px;padding:32px;">
           <tr><td>
-            <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#888;">Showroom Changan</p>
+            <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#888;">Showroom Foton</p>
             <h1 style="margin:0 0 14px;font-size:22px;color:#1a1a1c;">Confirma tu correo</h1>
             <p style="margin:0 0 18px;font-size:15px;line-height:1.55;color:#3a3a3c;">
               Recibimos una solicitud para crear una cuenta con <strong>${safeEmail}</strong>.
@@ -106,7 +106,7 @@ export function buildVerificationEmail(opts: {
   </table>
 </body>
 </html>`;
-  const text = `Confirma tu correo — Showroom Changan
+  const text = `Confirma tu correo — Showroom Foton
 
 Recibimos una solicitud para crear una cuenta con ${opts.email}.
 Abre este enlace para activarla (vence en 24 horas):

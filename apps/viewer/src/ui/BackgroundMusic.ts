@@ -5,7 +5,7 @@
 //   fallback — the first tap/click/key starts it.
 // - A small mute toggle (top-right) lets visitors silence it.
 
-const SRC = "/changan-theme.mp3";
+const SRC = "/foton-theme.mp3";
 const VOLUME = 0.35;
 
 export function initBackgroundMusic(mount: HTMLElement): void {

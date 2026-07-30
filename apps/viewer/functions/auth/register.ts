@@ -85,7 +85,7 @@ function renderRegisterPage(opts: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Crear cuenta — Showroom Changan</title>
+  <title>Crear cuenta — Showroom Foton</title>
   <link rel="preload" as="font" type="font/woff2" href="/fonts/lato-400.woff2" crossorigin />
   <link rel="preload" as="font" type="font/woff2" href="/fonts/lato-700.woff2" crossorigin />
   ${shellStyles()}
@@ -93,7 +93,7 @@ function renderRegisterPage(opts: {
 <body>
   <main class="auth-shell">
     <div class="auth-card">
-      <p class="auth-eyebrow">Showroom Changan</p>
+      <p class="auth-eyebrow">Showroom Foton</p>
       <h1 class="auth-title">Crear cuenta</h1>
       <p class="auth-desc">Te enviaremos un enlace de verificación al correo para activar tu cuenta.</p>
       ${errBlock}

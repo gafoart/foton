@@ -167,10 +167,10 @@ export function chatDevApiPlugin(appRoot: string): Plugin {
 
         // Load the brand KB + every model's KB so the assistant can answer
         // about any car in the lineup, not just the one currently on screen.
-        let changanKb: string;
+        let brandKb: string;
         let models: ModelKnowledge[];
         try {
-          changanKb = fs.readFileSync(path.join(knowledgeDir, "changan.txt"), "utf8");
+          brandKb = fs.readFileSync(path.join(knowledgeDir, "foton.txt"), "utf8");
           models = [...new Set([...Object.keys(MODEL_DISPLAY), modelId])]
             .map((id) => {
               try {
@@ -189,7 +189,7 @@ export function chatDevApiPlugin(appRoot: string): Plugin {
           return;
         }
 
-        const systemContent = buildSystemContent(changanKb, models, modelId, vehicleName);
+        const systemContent = buildSystemContent(brandKb, models, modelId, vehicleName);
         const result = await openaiChatCompletion(apiKey, openaiModel, systemContent, messages);
 
         if (!result.ok) {

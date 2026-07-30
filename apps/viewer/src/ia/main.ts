@@ -99,13 +99,8 @@ async function uploadAvatar(file: File): Promise<{ ok: boolean; message?: string
 type PreviewPane = "edit" | "preview";
 
 const DISPLAY_NAMES: Record<string, string> = {
-  changan: "Changan (identidad general)",
-  alsvin: "Alsvin",
-  cs35: "CS35",
-  cs55: "CS55",
-  cs95: "CS95",
-  "hunter-d": "Hunter",
-  "hunter-g": "Hunter Plus",
+  foton: "Foton (identidad general)",
+  "3t": "Foton 3T",
 };
 
 type KnowledgeSource = "kv" | "asset";
@@ -129,7 +124,7 @@ interface PageState {
 const state: PageState = {
   manifest: null,
   docs: new Map(),
-  activeSlug: "changan",
+  activeSlug: "foton",
 };
 
 async function fetchManifest(): Promise<SceneManifest | null> {
@@ -188,10 +183,10 @@ async function hydrateAuthBadge(host: HTMLElement): Promise<void> {
 
 function listSlugs(manifest: SceneManifest): string[] {
   /**
-   * "changan" first (identidad general) then each model in manifest order.
+   * "foton" first (identidad general) then each model in manifest order.
    * Anything beyond what the chatbot actually requests is hidden.
    */
-  return ["changan", ...manifest.models.map((m) => m.id)];
+  return ["foton", ...manifest.models.map((m) => m.id)];
 }
 
 async function fetchKnowledge(slug: string): Promise<{
@@ -327,7 +322,7 @@ function renderApp(root: HTMLElement, slugs: string[]): RenderHandles {
   title.textContent = "Editor de IA";
   const subtitle = el("p", "ia-subtitle");
   subtitle.textContent =
-    "Edita los archivos de entrenamiento de PANDi, el asistente virtual de Changan. Cada cambio se publica al guardar y empieza a usarse en la próxima conversación.";
+    "Edita los archivos de entrenamiento de PANDi, el asistente virtual de Foton. Cada cambio se publica al guardar y empieza a usarse en la próxima conversación.";
   titleWrap.append(title, subtitle);
   const navWrap = el("div", "ia-nav");
   const showroomLink = el("a", "ia-back");

@@ -11,12 +11,7 @@ export function isValidModelIdSlug(id: string): boolean {
 
 /** Known display names; unknown ids fall back to the id itself at call sites. */
 export const MODEL_DISPLAY: Record<string, string> = {
-  alsvin: "Alsvin",
-  cs35: "CS35",
-  cs55: "CS55",
-  cs95: "CS95",
-  "hunter-d": "Hunter (diesel)",
-  "hunter-g": "Hunter Plus (gasoline)",
+  "3t": "Foton 3T",
 };
 
 export const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
@@ -68,7 +63,7 @@ export interface ModelKnowledge {
 }
 
 export function buildSystemContent(
-  changanKb: string,
+  brandKb: string,
   models: ModelKnowledge[],
   currentModelId: string,
   currentVehicleName: string
@@ -77,15 +72,15 @@ export function buildSystemContent(
     .map((m) => `--- ${m.name} (model id: ${m.id}) ---\n${m.kb.trim()}`)
     .join("\n\n");
   return [
-    "You are Chatbot, the showroom assistant for Changan vehicles.",
+    "You are Chatbot, the showroom assistant for Foton vehicles.",
     `The user is currently viewing: ${currentVehicleName} (model id: ${currentModelId}).`,
-    "You can answer questions about ANY Changan model in the lineup below, including comparing them. When the user is vague, assume they mean the current model.",
-    "Prefer the knowledge below for Changan-specific facts. For general automotive questions not covered here, you may use your general knowledge — but never invent Changan specs you don't have; say you don't have that detail instead.",
+    "You can answer questions about ANY Foton model in the lineup below, including comparing them. When the user is vague, assume they mean the current model.",
+    "Prefer the knowledge below for Foton-specific facts. For general automotive questions not covered here, you may use your general knowledge — but never invent Foton specs you don't have; say you don't have that detail instead.",
     "",
-    "--- Changan (brand & behavior) ---",
-    changanKb.trim(),
+    "--- Foton (brand & behavior) ---",
+    brandKb.trim(),
     "",
-    "=== Changan lineup ===",
+    "=== Foton lineup ===",
     lineup,
   ].join("\n");
 }

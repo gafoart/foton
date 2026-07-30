@@ -15,7 +15,7 @@ type Env = {
   MANIFEST_KV: KVNamespace;
   OPENAI_API_KEY: string;
   OPENAI_MODEL?: string;
-  /** Nodo Public API — when set, the chat is served by the Nodo agent (tenant Changan). */
+  /** Nodo Public API — when set, the chat is served by the Nodo agent (tenant Foton). */
   NODO_API_KEY?: string;
   NODO_API_BASE_URL?: string;
 } & EnvWithCors;
@@ -90,16 +90,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   // The lineup list is the known-display set plus the requested model id
   // (validated as a slug upstream); ids without a knowledge file are dropped.
   const modelIds = [...new Set([...Object.keys(MODEL_DISPLAY), modelId])];
-  let changanKb: string;
+  let brandKb: string;
   let models: ModelKnowledge[];
   try {
-    const [changanRec, ...modelRecs] = await Promise.all([
-      getKnowledgeText(env.MANIFEST_KV, env.ASSETS, request.url, "changan"),
+    const [brandRec, ...modelRecs] = await Promise.all([
+      getKnowledgeText(env.MANIFEST_KV, env.ASSETS, request.url, "foton"),
       ...modelIds.map((id) =>
         getKnowledgeText(env.MANIFEST_KV, env.ASSETS, request.url, id)
       ),
     ]);
-    if (!changanRec) throw new Error("missing changan knowledge");
+    if (!brandRec) throw new Error("missing foton knowledge");
     models = modelIds
       .map((id, i) =>
         modelRecs[i]
@@ -108,13 +108,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       )
       .filter((m): m is ModelKnowledge => m !== null);
     if (models.length === 0) throw new Error("no model knowledge available");
-    changanKb = changanRec.text;
+    brandKb = brandRec.text;
   } catch (e) {
     console.error("[chat] knowledge load failed:", e);
     return withCors(request, env, json({ error: "Failed to load knowledge files" }, 500));
   }
 
-  const systemContent = buildSystemContent(changanKb, models, modelId, vehicleName);
+  const systemContent = buildSystemContent(brandKb, models, modelId, vehicleName);
   const openaiModel = env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL;
 
   const result = await openaiChatCompletion(env.OPENAI_API_KEY, openaiModel, systemContent, messages);

@@ -97,7 +97,7 @@ function loginPage(opts: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Iniciar sesión — Showroom Changan</title>
+  <title>Iniciar sesión — Showroom Foton</title>
   <link rel="preload" as="font" type="font/woff2" href="/fonts/lato-400.woff2" crossorigin />
   <link rel="preload" as="font" type="font/woff2" href="/fonts/lato-700.woff2" crossorigin />
   <style>
@@ -152,7 +152,7 @@ function loginPage(opts: {
 <body>
   <main class="auth-shell">
     <div class="auth-card">
-      <p class="auth-eyebrow">Showroom Changan</p>
+      <p class="auth-eyebrow">Showroom Foton</p>
       <h1 class="auth-title">Iniciar sesión</h1>
       <p class="auth-desc">El manual del proyecto y el editor de IA están restringidos al equipo del proyecto.</p>
       ${errBlock}
