@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const viewModeSchema = z.enum(["exterior", "detail", "interior"]);
+const viewModeSchema = z.enum(["exterior", "motor", "interior"]);
 
 const cameraInteractionModeSchema = z.enum(["orbit", "freelook"]);
 
@@ -34,13 +34,16 @@ const assetDefSchema = z.object({
     .optional(),
 });
 
+const accessoryDefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  asset: assetDefSchema,
+});
+
+// Dormant color-variant concept (paint/color-grade system).
 const colorDefSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
-  assets: z.object({
-    exterior: assetDefSchema,
-    detail: assetDefSchema,
-  }),
 });
 
 const cameraBookmarkSchema = z.object({
@@ -54,8 +57,9 @@ const namedCameraBookmarkSchema = z.object({
   pos: z.tuple([z.number(), z.number(), z.number()]),
   target: z.tuple([z.number(), z.number(), z.number()]),
   visibility: z.object({
-    exterior: z.boolean(),
-    detail: z.boolean(),
+    base: z.boolean(),
+    accessory: z.boolean(),
+    motor: z.boolean(),
     interior: z.boolean(),
   }),
   azimuthMin: z.number().nullable().optional().transform(v => v ?? undefined),
@@ -84,11 +88,15 @@ const annotationDefSchema = z.object({
 const modelDefSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
-  colors: z.array(colorDefSchema).min(1),
-  interior: assetDefSchema,
-  carShell: z
+  base: assetDefSchema,
+  accessories: z.array(accessoryDefSchema),
+  motor: assetDefSchema.optional(),
+  interior: assetDefSchema.optional(),
+  colors: z.array(colorDefSchema).optional(),
+  nameplate3d: z
     .object({
       transform: transformDefSchema,
+      tint: z.string().optional(),
     })
     .optional(),
   contactShadow: z
@@ -106,11 +114,13 @@ const modelDefSchema = z.object({
         .optional(),
     })
     .optional(),
-  bookmarks: z.object({
-    exterior: cameraBookmarkSchema,
-    detail: cameraBookmarkSchema,
-    interior: cameraBookmarkSchema,
-  }),
+  bookmarks: z
+    .object({
+      exterior: cameraBookmarkSchema.optional(),
+      motor: cameraBookmarkSchema.optional(),
+      interior: cameraBookmarkSchema.optional(),
+    })
+    .optional(),
   cameraBookmarks: z.array(namedCameraBookmarkSchema).optional(),
   annotations: z.array(annotationDefSchema),
 });
@@ -120,7 +130,8 @@ export const sceneManifestSchema = z.object({
   cdnBaseUrl: z.string().optional(),
   defaults: z.object({
     modelId: z.string().min(1),
-    colorId: z.string().min(1),
+    accessoryId: z.string().min(1).optional(),
+    colorId: z.string().min(1).optional(),
     view: viewModeSchema,
   }),
   models: z.array(modelDefSchema).min(1),

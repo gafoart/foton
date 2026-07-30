@@ -1,5 +1,5 @@
 {
-  "name": "changan-splat-showroom",
+  "name": "foton-splat-showroom",
   "private": true,
   "scripts": {
     "setup": "node scripts/setup.mjs",
@@ -10,9 +10,10 @@
     "build:viewer": "pnpm --filter viewer build",
     "build:editor": "pnpm --filter editor build",
     "lint": "pnpm -r run lint",
-    "pages:deploy:viewer": "pnpm run build:viewer && bash scripts/pages-wrangler-deploy.sh viewer changan-showroom",
-    "pages:create:editor": "pnpm --filter viewer exec wrangler pages project create spark-viewer-editor",
-    "pages:deploy:editor": "pnpm run build:editor && bash scripts/pages-wrangler-deploy.sh editor spark-viewer-editor",
+    "pages:create:viewer": "pnpm --filter viewer exec wrangler pages project create foton-showroom --production-branch main",
+    "pages:deploy:viewer": "pnpm run build:viewer && bash scripts/pages-wrangler-deploy.sh viewer foton-showroom",
+    "pages:create:editor": "pnpm --filter viewer exec wrangler pages project create foton-editor --production-branch main",
+    "pages:deploy:editor": "pnpm run build:editor && bash scripts/pages-wrangler-deploy.sh editor foton-editor",
     "sync:splats:r2": "bash scripts/sync-splats-r2.sh",
     "r2:provision": "bash scripts/r2-provision.sh",
     "r2:configure": "R2_SKIP_BUCKET_ENSURE=1 bash scripts/r2-provision.sh",

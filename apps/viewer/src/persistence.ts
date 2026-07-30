@@ -1,21 +1,23 @@
 /**
  * localStorage-backed snapshot of "where the user last was" so that a tab
  * reload (manual refresh, mobile OOM kill, accidental swipe) brings them
- * back to the same model + color + bookmark instead of the default landing
- * state. URL params (`?load=`, `?color=`) still override this so shared
- * links remain deterministic.
+ * back to the same model + accessory + bookmark instead of the default
+ * landing state. URL params (`?model=`, `?acc=`) still override this so
+ * shared links remain deterministic.
  */
 import type { ViewMode } from "@changan/shared";
 
 export interface PersistedView {
   modelId: string;
-  colorId: string;
+  /** Active accessory id, or null for base-only. */
+  accessoryId: string | null;
   viewMode: ViewMode;
   bookmarkIndex: number;
   savedAt: number;
 }
 
-const KEY = "changan:lastView:v1";
+/** v2: FOTON manifest restructure (colorId → accessoryId). Old v1 keys are simply ignored. */
+const KEY = "foton:lastView:v2";
 /**
  * 24 h TTL — long enough to survive an iOS OOM kill or commute-time tab
  * suspend, short enough that returning the next day or week lands on the
@@ -55,7 +57,7 @@ export function loadLastView(): PersistedView | null {
     const parsed = JSON.parse(raw) as Partial<PersistedView>;
     if (
       typeof parsed.modelId !== "string" ||
-      typeof parsed.colorId !== "string" ||
+      (typeof parsed.accessoryId !== "string" && parsed.accessoryId !== null) ||
       typeof parsed.viewMode !== "string" ||
       typeof parsed.bookmarkIndex !== "number" ||
       typeof parsed.savedAt !== "number"

@@ -1,12 +1,15 @@
-export const ALLOWED_MODEL_IDS = new Set([
-  "alsvin",
-  "cs35",
-  "cs55",
-  "cs95",
-  "hunter-d",
-  "hunter-g",
-]);
+/**
+ * Model ids are manifest-driven, so instead of a hardcoded whitelist we accept
+ * any well-formed slug (letters/digits/hyphen/underscore, max 64 chars). The
+ * knowledge loader simply finds no KB file for ids it doesn't know.
+ */
+const MODEL_ID_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
+export function isValidModelIdSlug(id: string): boolean {
+  return MODEL_ID_SLUG_RE.test(id);
+}
+
+/** Known display names; unknown ids fall back to the id itself at call sites. */
 export const MODEL_DISPLAY: Record<string, string> = {
   alsvin: "Alsvin",
   cs35: "CS35",
@@ -40,7 +43,7 @@ export function parseChatRequestBody(
 ): { modelId: string; messages: ChatMessage[] } | null {
   if (typeof data !== "object" || data === null) return null;
   const o = data as { modelId?: unknown; messages?: unknown };
-  if (typeof o.modelId !== "string" || !ALLOWED_MODEL_IDS.has(o.modelId)) return null;
+  if (typeof o.modelId !== "string" || !isValidModelIdSlug(o.modelId)) return null;
   if (!Array.isArray(o.messages)) return null;
   const messages: ChatMessage[] = [];
   for (const item of o.messages) {

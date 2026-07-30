@@ -15,12 +15,17 @@
  */
 import type { ModelDef, SceneManifest } from "@changan/shared";
 import { resolveSwatchHex, validateManifestSafe } from "@changan/shared";
-import {
-  ALLOWED_URL_COLORS,
-  type AllowedUrlColor,
-  type UrlViewParam,
-} from "../showroom/urlParams.js";
+import { type UrlViewParam } from "../showroom/urlParams.js";
 import "./style.css";
+
+/**
+ * Legacy canonical `?color=` values. The showroom no longer consumes a color
+ * URL param (colors are dormant in the FOTON manifest), but this internal
+ * page keeps emitting them for backwards compatibility with old links; models
+ * without declared colors simply show every dot disabled.
+ */
+const ALLOWED_URL_COLORS = ["white", "black", "red", "grey", "silver"] as const;
+type AllowedUrlColor = (typeof ALLOWED_URL_COLORS)[number];
 
 const THUMBNAIL_MAP: Record<string, string> = {
   alsvin: "/thumbnails/alsvin.png",
@@ -97,7 +102,7 @@ async function fetchManifest(): Promise<SceneManifest> {
 }
 
 function modelHasColor(model: ModelDef, colorId: AllowedUrlColor): boolean {
-  return model.colors.some((c) => c.id.toLowerCase() === colorId);
+  return (model.colors ?? []).some((c) => c.id.toLowerCase() === colorId);
 }
 
 function resolveInitialColor(model: ModelDef): AllowedUrlColor {

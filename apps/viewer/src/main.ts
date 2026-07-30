@@ -19,19 +19,19 @@ import {
 } from "@changan/scene-runtime";
 import {
   validateManifestSafe,
-  assetKey,
-  interiorAssetKey,
+  splatLayerKey,
+  parseSplatLayerKey,
   loadManifestFromStorage,
   getScale,
   resolveSplatAssetUrl,
-  resolveSwatchHex,
-  resolveDefaultColorId,
 } from "@changan/shared";
 import type {
   SceneManifest,
   AssetDef,
   NamedCameraBookmark,
   ModelDef,
+  SplatLayerKind,
+  ViewMode,
 } from "@changan/shared";
 import {
   AssetManager,
@@ -234,7 +234,7 @@ const DEALERSHIP_URL = resolveSplatAssetUrl("/splats/dealership.sog");
 const FLOOR_URL = resolveSplatAssetUrl("/splats/floor.glb");
 const CEILING_URL = resolveSplatAssetUrl("/splats/ceiling.glb");
 const BLACKDROP_URL = resolveSplatAssetUrl("/splats/blackdrop.glb");
-const CHANGAN3D_URL = resolveSplatAssetUrl("/splats/changan3D.glb");
+const CHANGAN3D_URL = resolveSplatAssetUrl("/splats/foton3d.glb");
 
 const dealershipGroup = new THREE.Group();
 dealershipGroup.userData.isDealership = true;
@@ -258,13 +258,17 @@ const panoGroup = new THREE.Group();
 panoGroup.userData.isPanoBackground = true;
 let panoLoadedUrl = "";
 
-/** Extruded car GLB: `/splats/{modelId}/{modelId}.glb`, behind splats for the selected model. */
-const carShellGroup = new THREE.Group();
-carShellGroup.userData.isCarShell = true;
-carShellGroup.userData.modelId = "";
-let carShellLoadedModelId = "";
-/** Set from URL: `dealer=1` showroom — do not load/show per-model `.glb` shells (dealership is the backdrop). */
-let hideCarShellGlbWhenDealership = false;
+/**
+ * Decorative 3D nameplate GLB: `/splats/{modelId}/{modelId}.glb`, rendered
+ * behind the splats for the selected model (same renderOrder slot the old car
+ * shell used). Follows the base layer's bookmark visibility.
+ */
+const nameplate3dGroup = new THREE.Group();
+nameplate3dGroup.userData.isNameplate3d = true;
+nameplate3dGroup.userData.modelId = "";
+let nameplate3dLoadedModelId = "";
+/** Set from URL: `dealer=1` showroom — do not load/show per-model nameplate GLBs (dealership is the backdrop). */
+let hideNameplate3dGlbWhenDealership = false;
 
 function disposeObject3DSubtree(root: THREE.Object3D): void {
   root.traverse((obj) => {
@@ -276,64 +280,75 @@ function disposeObject3DSubtree(root: THREE.Object3D): void {
   });
 }
 
-/** Load optional `{modelId}.glb` from the model’s splats folder; no-op if missing. */
-async function loadCarShellForModel(modelId: string): Promise<void> {
+/** Load optional 3D nameplate `{modelId}.glb` from the model’s splats folder; no-op if missing. */
+async function loadNameplate3dForModel(modelId: string): Promise<void> {
   if (!modelId) return;
-  if (hideCarShellGlbWhenDealership) {
-    while (carShellGroup.children.length > 0) {
-      const c = carShellGroup.children[0]!;
-      carShellGroup.remove(c);
+  if (hideNameplate3dGlbWhenDealership) {
+    while (nameplate3dGroup.children.length > 0) {
+      const c = nameplate3dGroup.children[0]!;
+      nameplate3dGroup.remove(c);
       disposeObject3DSubtree(c);
     }
-    carShellGroup.userData.modelId = "";
-    carShellLoadedModelId = "";
-    carShellGroup.visible = false;
+    nameplate3dGroup.userData.modelId = "";
+    nameplate3dLoadedModelId = "";
+    nameplate3dGroup.visible = false;
     return;
   }
-  if (carShellLoadedModelId === modelId && carShellGroup.children.length > 0) return;
+  if (nameplate3dLoadedModelId === modelId && nameplate3dGroup.children.length > 0) return;
 
   const url = resolveSplatAssetUrl(`/splats/${modelId}/${modelId}.glb`);
   try {
     const loader = new GLTFLoader();
     const gltf = await loader.loadAsync(url);
-    while (carShellGroup.children.length > 0) {
-      const c = carShellGroup.children[0]!;
-      carShellGroup.remove(c);
+    while (nameplate3dGroup.children.length > 0) {
+      const c = nameplate3dGroup.children[0]!;
+      nameplate3dGroup.remove(c);
       disposeObject3DSubtree(c);
     }
-    carShellGroup.add(gltf.scene);
-    carShellGroup.userData.modelId = modelId;
-    carShellLoadedModelId = modelId;
-    carShellGroup.visible = true;
-    carShellGroup.traverse((o) => {
+    nameplate3dGroup.add(gltf.scene);
+    nameplate3dGroup.userData.modelId = modelId;
+    nameplate3dLoadedModelId = modelId;
+    nameplate3dGroup.visible = true;
+    nameplate3dGroup.traverse((o) => {
       if (o instanceof THREE.Mesh) {
         o.renderOrder = -50;
       }
     });
-    const shellT = manifest?.models.find((m) => m.id === modelId)?.carShell?.transform;
-    if (shellT) {
-      carShellGroup.position.set(shellT.pos[0], shellT.pos[1], shellT.pos[2]);
-      carShellGroup.quaternion.set(shellT.rot[0], shellT.rot[1], shellT.rot[2], shellT.rot[3]);
-      const [sx, sy, sz] = getScale(shellT);
-      carShellGroup.scale.set(sx, sy, sz);
+    const npDef = manifest?.models.find((m) => m.id === modelId)?.nameplate3d;
+    const npT = npDef?.transform;
+    if (npT) {
+      nameplate3dGroup.position.set(npT.pos[0], npT.pos[1], npT.pos[2]);
+      nameplate3dGroup.quaternion.set(npT.rot[0], npT.rot[1], npT.rot[2], npT.rot[3]);
+      const [sx, sy, sz] = getScale(npT);
+      nameplate3dGroup.scale.set(sx, sy, sz);
     } else {
-      carShellGroup.position.set(0, 0, 0);
-      carShellGroup.quaternion.set(0, 0, 0, 1);
-      carShellGroup.scale.set(1, 1, 1);
+      nameplate3dGroup.position.set(0, 0, 0);
+      nameplate3dGroup.quaternion.set(0, 0, 0, 1);
+      nameplate3dGroup.scale.set(1, 1, 1);
     }
-    if (!carShellGroup.parent) {
-      runtime.getSplatContainer().add(carShellGroup);
+    // `tint` overrides the mesh base color; without it the GLB renders as authored.
+    if (npDef?.tint) {
+      applyChangan3DTint(nameplate3dGroup, npDef.tint);
+    }
+    if (!nameplate3dGroup.parent) {
+      runtime.getSplatContainer().add(nameplate3dGroup);
     }
   } catch {
-    while (carShellGroup.children.length > 0) {
-      const c = carShellGroup.children[0]!;
-      carShellGroup.remove(c);
+    while (nameplate3dGroup.children.length > 0) {
+      const c = nameplate3dGroup.children[0]!;
+      nameplate3dGroup.remove(c);
       disposeObject3DSubtree(c);
     }
-    carShellGroup.userData.modelId = "";
-    carShellLoadedModelId = "";
-    carShellGroup.visible = false;
+    nameplate3dGroup.userData.modelId = "";
+    nameplate3dLoadedModelId = "";
+    nameplate3dGroup.visible = false;
   }
+}
+
+/** The decorative nameplate GLB follows the base layer's bookmark visibility. */
+function syncNameplate3dVisibility(baseVisible: boolean): void {
+  if (nameplate3dGroup.children.length === 0) return;
+  nameplate3dGroup.visible = baseVisible && !hideNameplate3dGlbWhenDealership;
 }
 
 function isEnvironmentBackdropChild(obj: THREE.Object3D): boolean {
@@ -609,7 +624,7 @@ async function loadChangan3D(): Promise<void> {
     applyChangan3DTint(changan3dGroup, manifest?.changan3D?.tint);
     runtime.getSplatContainer().add(changan3dGroup);
   } catch (err) {
-    console.warn("Changan3D GLB failed to load:", err);
+    console.warn("Foton 3D GLB failed to load:", err);
   }
 }
 
@@ -1030,9 +1045,15 @@ const assetManager = new AssetManager({
   isMobile,
   qualityProfile,
   onAssetLoaded: (key, group) => {
-    if (!key.endsWith(":exterior")) return;
-    // Attach the worldModifier when a fresh exterior loads. The mask + grade are
-    // applied (and awaited) per active model/color in the load flow below, so the
+    if (!key.endsWith(":base")) return;
+    // Dormant paint pipeline: the clearcoat/grade shader only attaches when the
+    // model actually declares color variants. FOTON models (no colors) render
+    // the raw splats.
+    const parsed = parseSplatLayerKey(key);
+    const model = manifest?.models.find((m) => m.id === parsed?.modelId);
+    if (!model?.colors?.length) return;
+    // Attach the worldModifier when a fresh base body loads. The mask + grade
+    // are applied (and awaited) per active model in the load flow below, so the
     // body never reveals before its paint is ready — see ensurePaintReady.
     carClearcoat.applyToExterior(key, group);
   },
@@ -1117,7 +1138,7 @@ if (isMobile && typeof document !== "undefined") {
 carBlobShadow = new CarBlobShadow();
 runtime.getSplatContainer().add(carBlobShadow.group);
 
-/** LRU-eviction shield for the active showroom car (exterior + motor + interior). */
+/** LRU-eviction shield for the active showroom car (base + active accessory + motor + interior). */
 function syncPresentationCacheProtectKeys(): void {
   if (!manifest || !stateStore) {
     assetManager.setProtectedPresentationKeys([]);
@@ -1129,11 +1150,12 @@ function syncPresentationCacheProtectKeys(): void {
     assetManager.setProtectedPresentationKeys([]);
     return;
   }
-  const keys: string[] = [
-    getAssetKey(st.modelId, st.colorId, "exterior"),
-    getAssetKey(st.modelId, st.colorId, "detail"),
-  ];
-  if (m.interior) keys.push(interiorAssetKey(st.modelId));
+  const keys: string[] = [splatLayerKey(st.modelId, "base")];
+  if (st.accessoryId) {
+    keys.push(splatLayerKey(st.modelId, "accessory", st.accessoryId));
+  }
+  if (m.motor) keys.push(splatLayerKey(st.modelId, "motor"));
+  if (m.interior) keys.push(splatLayerKey(st.modelId, "interior"));
   assetManager.setProtectedPresentationKeys(keys);
 }
 
@@ -1456,24 +1478,71 @@ async function loadManifest(): Promise<SceneManifest> {
   throw new Error("No valid manifest found");
 }
 
-/**
- * Color token for the shared exterior body. All colors of a model now render
- * from one `{model}_white_ext.sog`, recolored per-color by the paint grade — so
- * the exterior asset key is color-independent (loaded once, never reloaded on a
- * color change). Only `detail` (motor/trunk) remains per-color.
- */
-const SHARED_EXTERIOR_COLOR = "base";
+/** Per-bookmark layer visibility (see `NamedCameraBookmark.visibility`). */
+type LayerVisibility = Record<SplatLayerKind, boolean>;
 
-function getAssetKey(
-  modelId: string,
-  colorId: string,
-  viewMode: string
-): string {
-  if (viewMode === "interior") return interiorAssetKey(modelId);
-  if (viewMode === "exterior") {
-    return assetKey(modelId, SHARED_EXTERIOR_COLOR, "exterior");
+/** One loadable splat layer of a model, keyed by `splatLayerKey`. */
+interface ModelLayerEntry {
+  key: string;
+  kind: SplatLayerKind;
+  def: AssetDef;
+}
+
+/**
+ * Every splat layer the model can present given the currently selected
+ * accessory. The `accessory` slot resolves to the ACTIVE accessory only —
+ * when none is selected the accessory layer is simply absent (bookmarks frame
+ * views; the accessory selector decides which attachment).
+ */
+function getModelLayerEntries(
+  model: ModelDef,
+  accessoryId: string | null
+): ModelLayerEntry[] {
+  const entries: ModelLayerEntry[] = [
+    { key: splatLayerKey(model.id, "base"), kind: "base", def: model.base },
+  ];
+  if (accessoryId) {
+    const acc = model.accessories.find((a) => a.id === accessoryId);
+    if (acc) {
+      entries.push({
+        key: splatLayerKey(model.id, "accessory", acc.id),
+        kind: "accessory",
+        def: acc.asset,
+      });
+    }
   }
-  return assetKey(modelId, colorId, "detail");
+  if (model.motor) {
+    entries.push({
+      key: splatLayerKey(model.id, "motor"),
+      kind: "motor",
+      def: model.motor,
+    });
+  }
+  if (model.interior) {
+    entries.push({
+      key: splatLayerKey(model.id, "interior"),
+      kind: "interior",
+      def: model.interior,
+    });
+  }
+  return entries;
+}
+
+/** Same as {@link getModelLayerEntries} but from a model id (empty when unknown). */
+function getLayerEntries(
+  modelId: string,
+  accessoryId: string | null
+): ModelLayerEntry[] {
+  const model = manifest?.models.find((m) => m.id === modelId);
+  if (!model) return [];
+  return getModelLayerEntries(model, accessoryId);
+}
+
+/** Map bookmark layer visibility onto the annotation system's ViewMode flags. */
+function annotationViewsFromVisibility(
+  vis: LayerVisibility
+): Record<ViewMode, boolean> {
+  return { exterior: vis.base, motor: vis.motor, interior: vis.interior };
 }
 
 function isPresentationMode(model: {
@@ -1487,8 +1556,8 @@ function isPresentationMode(model: {
  * motor / trunk (maletero) bookmarks — matches programmed bookmark ids/names.
  */
 function bookmarkTransitionNeedsLoadingCurtain(
-  fromVis: { exterior: boolean; detail: boolean; interior: boolean },
-  toVis: { exterior: boolean; detail: boolean; interior: boolean },
+  fromVis: LayerVisibility,
+  toVis: LayerVisibility,
   fromBm: NamedCameraBookmark | undefined,
   toBm: NamedCameraBookmark
 ): boolean {
@@ -1505,56 +1574,56 @@ function getFirstProgrammedCamera(model: ModelDef): NamedCameraBookmark | null {
   if (model.cameraBookmarks?.length) {
     return model.cameraBookmarks[0] ?? null;
   }
-  const b = model.bookmarks.exterior;
+  const b = model.bookmarks?.exterior;
   if (!b) return null;
   return {
     id: "legacy-exterior",
     name: "Exterior",
     pos: b.pos,
     target: b.target,
-    visibility: { exterior: true, detail: false, interior: false },
+    visibility: { base: true, accessory: true, motor: false, interior: false },
   };
 }
 
-type AssetLayer = "exterior" | "detail" | "interior";
+/**
+ * Per-layer visibility for a bookmark with the accessory selector applied.
+ * The selector is authoritative for the accessory layer: the selected
+ * accessory shows wherever the base shows, and "Ninguno" hides every
+ * accessory. The bookmark's stored `accessory` flag is NOT consulted —
+ * bookmarks frame views; the selector decides the attachment.
+ */
+function effectiveBookmarkVisibility(
+  bm: NamedCameraBookmark,
+  accessoryId: string | null
+): LayerVisibility {
+  return {
+    ...bm.visibility,
+    accessory: accessoryId !== null && bm.visibility.base,
+  };
+}
 
 function applyBookmarkVisibility(
   bm: NamedCameraBookmark,
   modelId: string,
-  colorId: string,
-  opts?: { revealOpacityLayers?: Set<AssetLayer> }
+  accessoryId: string | null,
+  opts?: { revealOpacityLayers?: Set<SplatLayerKind> }
 ): void {
   const reveal = opts?.revealOpacityLayers;
-  const keys: Array<{ key: string; layer: AssetLayer; visible: boolean }> = [
-    {
-      key: getAssetKey(modelId, colorId, "exterior"),
-      layer: "exterior",
-      visible: bm.visibility.exterior,
-    },
-    {
-      key: getAssetKey(modelId, colorId, "detail"),
-      layer: "detail",
-      visible: bm.visibility.detail,
-    },
-    {
-      key: interiorAssetKey(modelId),
-      layer: "interior",
-      visible: bm.visibility.interior,
-    },
-  ];
-  for (const { key, layer, visible } of keys) {
+  const vis = effectiveBookmarkVisibility(bm, accessoryId);
+  for (const { key, kind } of getLayerEntries(modelId, accessoryId)) {
+    const visible = vis[kind];
     const group = assetManager.getCached(key);
     if (group) {
       attachCachedSplatGroupIfNeeded(group);
       group.visible = visible;
       const mesh = group.children[0] as SplatMesh | undefined;
       if (mesh) {
-        if (!reveal?.has(layer) && mesh.objectModifier != null) {
+        if (!reveal?.has(kind) && mesh.objectModifier != null) {
           stripRevealModifier(mesh);
         }
         if (!visible) {
           mesh.opacity = 0;
-        } else if (reveal?.has(layer)) {
+        } else if (reveal?.has(kind)) {
           /* opacity driven by SplatSpreadReveal or LayerFade */
         } else {
           mesh.opacity = 1;
@@ -1562,24 +1631,16 @@ function applyBookmarkVisibility(
       }
     }
   }
+  // Decorative nameplate GLB (and the contact shadow, which tracks the base
+  // group's visibility every frame in CarBlobShadow.sync) follow the base layer.
+  syncNameplate3dVisibility(bm.visibility.base);
   /**
    * Visibility/opacity flipped on at least one splat group, but the camera
-   * may not have moved (color change while in a freelook bookmark, prefetch
-   * landing, fade onComplete). Idle-skip would otherwise leave the change
-   * unrendered until the next user input.
+   * may not have moved (accessory change while in a freelook bookmark,
+   * prefetch landing, fade onComplete). Idle-skip would otherwise leave the
+   * change unrendered until the next user input.
    */
   runtime.requestRender(2);
-}
-
-function getLayerGroups(
-  modelId: string,
-  colorId: string
-): Array<{ key: string; layer: AssetLayer }> {
-  return [
-    { key: getAssetKey(modelId, colorId, "exterior"), layer: "exterior" },
-    { key: getAssetKey(modelId, colorId, "detail"), layer: "detail" },
-    { key: interiorAssetKey(modelId), layer: "interior" },
-  ];
 }
 
 /**
@@ -1607,22 +1668,27 @@ function hideOtherModels(activeModelId: string): void {
   }
 }
 
-/** Hide exterior/detail splats for this model that belong to another color (after a color change). */
-function hideNonActiveColorSplats(modelId: string, activeColorId: string): void {
+/**
+ * Hide accessory splats for this model that belong to a non-active accessory
+ * (after an accessory swap, or when deselecting down to base-only). The base
+ * body is shared across accessories, so it is never hidden here.
+ */
+function hideNonActiveAccessorySplats(
+  modelId: string,
+  activeAccessoryId: string | null
+): void {
   const splatContainer = runtime.getSplatContainer();
   for (const child of splatContainer.children) {
     if (isEnvironmentBackdropChild(child as THREE.Object3D)) continue;
     const key = (child as THREE.Object3D).userData?.assetKey as string | undefined;
     if (!key) continue;
-    const parts = key.split(":");
-    if (parts.length >= 3 && parts[0] === modelId) {
-      const color = parts[1];
-      const layer = parts[2];
-      // Exterior is a single shared body (color comes from the grade), so never
-      // hide it on a color change — only the per-color detail (motor/trunk).
-      if (layer === "detail" && color !== activeColorId) {
-        hideSplatGroup(child as THREE.Object3D);
-      }
+    const parsed = parseSplatLayerKey(key);
+    if (!parsed || parsed.modelId !== modelId) continue;
+    if (
+      parsed.kind === "accessory" &&
+      parsed.accessoryId !== (activeAccessoryId ?? undefined)
+    ) {
+      hideSplatGroup(child as THREE.Object3D);
     }
   }
 }
@@ -1684,6 +1750,21 @@ async function loadModelMask(modelId: string): Promise<void> {
  */
 let lastPaintModelId: string | null = null;
 async function ensurePaintReady(modelId: string, colorId: string): Promise<void> {
+  // Dormant paint pipeline: only models that declare color variants run the
+  // mask/grade/clearcoat machinery. FOTON models (no colors) skip it entirely.
+  const model = manifest?.models.find((m) => m.id === modelId);
+  if (!model?.colors?.length) return;
+  // Viewer state no longer tracks a color; if the dormant system reactivates,
+  // fall back to the manifest default and then the model's first color.
+  if (!colorId) {
+    colorId =
+      (manifest?.defaults.colorId &&
+      model.colors.some((c) => c.id === manifest?.defaults.colorId)
+        ? manifest?.defaults.colorId
+        : undefined) ??
+      model.colors[0]?.id ??
+      "";
+  }
   if (modelId !== lastPaintModelId) {
     // Kick the color-set fetch in parallel with the (larger) mask download.
     const setPrefetch = loadGradeSet(modelId);
@@ -1780,9 +1861,9 @@ async function applyPaintGrade(modelId: string, colorId: string): Promise<void> 
   const preset = set
     ? (set[colorId] ?? null)
     : await fetchLegacyPreset(modelId, colorId);
-  // The color may have changed while the preset was fetching.
+  // The model may have changed while the preset was fetching.
   const st = stateStore?.getState();
-  if (!st || st.modelId !== modelId || st.colorId !== colorId) return;
+  if (!st || st.modelId !== modelId) return;
   if (preset?.data) carClearcoat.setGrade(packGrade(preset.data));
   else carClearcoat.clearGrade();
 }
@@ -1857,12 +1938,6 @@ async function applyClearcoatFx(modelId: string): Promise<void> {
   }
 }
 
-function resolveColorForModel(model: ModelDef, preferredColorId: string) {
-  return (
-    model.colors.find((c) => c.id === preferredColorId) ?? model.colors[0] ?? null
-  );
-}
-
 const preloadedSplatUrls = new Set<string>();
 
 /**
@@ -1891,16 +1966,6 @@ function preloadSplat(url: string): void {
 }
 
 /**
- * Queue sibling colors of the currently active car for low-priority download.
- * AssetManager.prefetch uses requestIdleCallback + the same semaphore, so this
- * cannot block the active load.
- *
- * Skipped entirely on mobile — every prefetched color adds another 5-15 MB to
- * peak heap + GPU memory, and iOS Safari aggressively reloads tabs that drift
- * past ~250 MB. Color picker switches on mobile still benefit from the edge
- * cache; they just won't be instant.
- */
-/**
  * Snapshot current view → localStorage. Wired to every state change and
  * bookmark navigation so a tab reload (manual or OOM kill) restores the
  * exact spot the user was looking at.
@@ -1910,108 +1975,130 @@ function persistCurrentView(): void {
   const s = stateStore.getState();
   saveLastView({
     modelId: s.modelId,
-    colorId: s.colorId,
+    accessoryId: s.accessoryId,
     viewMode: s.viewMode,
     bookmarkIndex: currentBookmarkIndex,
   });
 }
 
-function prefetchSiblingColors(modelId: string, activeColorId: string): void {
+/**
+ * Queue the model's OTHER accessories for low-priority download so switching
+ * attachments feels instant. AssetManager.prefetch uses requestIdleCallback +
+ * the same semaphore, so this cannot block the active load.
+ *
+ * Skipped entirely on mobile — every prefetched accessory adds more peak heap
+ * + GPU memory, and iOS Safari aggressively reloads tabs that drift past
+ * ~250 MB. Accessory switches on mobile still benefit from the edge cache;
+ * they just won't be instant.
+ */
+function prefetchSiblingAccessories(
+  modelId: string,
+  activeAccessoryId: string | null
+): void {
   if (!manifest || isMobile) return;
   const model = manifest.models.find((m) => m.id === modelId);
   if (!model) return;
   const lod = getLOD();
   const items: Array<{ key: string; assetDef: AssetDef }> = [];
-  for (const c of model.colors) {
-    if (c.id === activeColorId) continue;
-    for (const layer of ["exterior", "detail"] as const) {
-      const src = c.assets?.[layer];
-      if (!src) continue;
-      const key = getAssetKey(modelId, c.id, layer);
-      if (assetManager.has(key)) continue;
-      items.push({
-        key,
-        assetDef: { ...src, url: resolveAssetUrl(src, lod) },
-      });
-    }
+  for (const acc of model.accessories) {
+    if (acc.id === activeAccessoryId) continue;
+    const key = splatLayerKey(modelId, "accessory", acc.id);
+    if (assetManager.has(key)) continue;
+    items.push({
+      key,
+      assetDef: { ...acc.asset, url: resolveAssetUrl(acc.asset, lod) },
+    });
   }
   if (items.length > 0) assetManager.prefetch(items);
 }
 
-/** Gate load: exterior only; progress 0..1 */
-async function loadCarExteriorOnly(
+/** Gate load: base body (+ the selected accessory, if any); progress 0..1 */
+async function loadCarBaseLayers(
   modelId: string,
-  colorId: string,
+  accessoryId: string | null,
   signal: AbortSignal,
   onCarProgress: (unit: number) => void
 ): Promise<void> {
   if (!manifest) throw new Error("No manifest");
   const model = manifest.models.find((m) => m.id === modelId);
-  const color = model ? resolveColorForModel(model, colorId) : null;
-  if (!model || !color) throw new Error("Model/color not found");
+  if (!model) throw new Error("Model not found");
 
   const lod = getLOD();
-  const exteriorDef: AssetDef = {
-    ...color.assets.exterior,
-    url: resolveAssetUrl(color.assets.exterior, lod),
-  };
-
   hideOtherModels(modelId);
 
-  await assetManager.loadAsset(getAssetKey(modelId, colorId, "exterior"), exteriorDef, {
-    signal,
-    onProgress: onCarProgress,
-  });
+  const jobs: Array<{ key: string; def: AssetDef }> = [
+    {
+      key: splatLayerKey(modelId, "base"),
+      def: { ...model.base, url: resolveAssetUrl(model.base, lod) },
+    },
+  ];
+  const acc = accessoryId
+    ? model.accessories.find((a) => a.id === accessoryId)
+    : undefined;
+  if (acc) {
+    jobs.push({
+      key: splatLayerKey(modelId, "accessory", acc.id),
+      def: { ...acc.asset, url: resolveAssetUrl(acc.asset, lod) },
+    });
+  }
+
+  const progress = new Array<number>(jobs.length).fill(0);
+  await Promise.all(
+    jobs.map(({ key, def }, i) =>
+      assetManager.loadAsset(key, def, {
+        signal,
+        onProgress: (u) => {
+          progress[i] = u;
+          let sum = 0;
+          for (const v of progress) sum += v;
+          onCarProgress(sum / jobs.length);
+        },
+      })
+    )
+  );
 }
 
 /**
- * Load motor + interior with no UI; after each asset, re-apply bookmark visibility so hidden layers stay hidden.
+ * Load the remaining presentation layers (accessory / motor / interior) with
+ * no UI; after each asset, re-apply bookmark visibility so hidden layers stay
+ * hidden.
  */
 async function prefetchPresentationLayersSilently(
   modelId: string,
-  colorId: string,
+  accessoryId: string | null,
   bm: NamedCameraBookmark,
   signal?: AbortSignal
 ): Promise<void> {
   if (!manifest) return;
   const model = manifest.models.find((m) => m.id === modelId);
-  const color = model ? resolveColorForModel(model, colorId) : null;
-  if (!model || !color || !isPresentationMode(model)) return;
+  if (!model || !isPresentationMode(model)) return;
 
   const lod = getLOD();
-  const detKey = getAssetKey(modelId, colorId, "detail");
-  const intKey = interiorAssetKey(modelId);
-  const detailDef: AssetDef = {
-    ...color.assets.detail,
-    url: resolveAssetUrl(color.assets.detail, lod),
-  };
-  const interiorDef: AssetDef = {
-    ...model.interior,
-    url: resolveAssetUrl(model.interior, lod),
-  };
 
   /**
    * Bail before re-applying bookmark visibility if the user changed
-   * model/color while we were loading. Without this, a finished prefetch for
-   * the old color calls applyBookmarkVisibility with the OLD colorId, which
-   * sets `group.visible = true` + `mesh.opacity = 1` on the previous color's
-   * exterior — producing the white-and-red overlap when the new color is
+   * model/accessory while we were loading. Without this, a finished prefetch
+   * for the old selection calls applyBookmarkVisibility with a STALE
+   * accessoryId, which sets `group.visible = true` + `mesh.opacity = 1` on
+   * the previous attachment — producing an overlap while the new one is
    * mid-reveal.
    */
   const stillCurrent = (): boolean => {
     if (signal?.aborted) return false;
     const st = stateStore?.getState();
-    return st?.modelId === modelId && st?.colorId === colorId;
+    return st?.modelId === modelId && (st?.accessoryId ?? null) === accessoryId;
   };
 
   try {
-    if (!assetManager.has(detKey)) {
-      await assetManager.loadAsset(detKey, detailDef, { signal });
-      if (stillCurrent()) applyBookmarkVisibility(bm, modelId, colorId);
-    }
-    if (!assetManager.has(intKey)) {
-      await assetManager.loadAsset(intKey, interiorDef, { signal });
-      if (stillCurrent()) applyBookmarkVisibility(bm, modelId, colorId);
+    for (const { key, kind, def } of getModelLayerEntries(model, accessoryId)) {
+      if (kind === "base") continue;
+      if (assetManager.has(key)) continue;
+      await assetManager.loadAsset(
+        key,
+        { ...def, url: resolveAssetUrl(def, lod) },
+        { signal }
+      );
+      if (stillCurrent()) applyBookmarkVisibility(bm, modelId, accessoryId);
     }
   } catch (e) {
     if ((e as Error).name !== "AbortError") {
@@ -2026,50 +2113,33 @@ type EnsureBookmarkLayersOpts = {
   onProgress?: (pct: number) => void;
 };
 
-/** Load exterior/detail/interior into cache if missing but needed for a bookmark transition (e.g. after LRU eviction). */
+/** Load any splat layer into cache if missing but needed for a bookmark transition (e.g. after LRU eviction). */
 async function ensureBookmarkLayersLoaded(
   modelId: string,
-  colorId: string,
-  fromVis: { exterior: boolean; detail: boolean; interior: boolean },
-  toVis: { exterior: boolean; detail: boolean; interior: boolean },
+  accessoryId: string | null,
+  fromVis: LayerVisibility,
+  toVis: LayerVisibility,
   opts?: EnsureBookmarkLayersOpts
 ): Promise<void> {
   if (!manifest) return;
   const model = manifest.models.find((x) => x.id === modelId);
-  const color = model ? resolveColorForModel(model, colorId) : null;
-  if (!model || !color) return;
+  if (!model) return;
 
   const lod = getLOD();
   type Job = { key: string; def: AssetDef };
   const jobs: Job[] = [];
 
-  for (const { key, layer } of getLayerGroups(modelId, colorId)) {
-    if (!fromVis[layer] && !toVis[layer]) continue;
+  for (const { key, kind, def } of getModelLayerEntries(model, accessoryId)) {
+    if (!fromVis[kind] && !toVis[kind]) continue;
     const cached = assetManager.getCached(key);
     if (cached) {
       attachCachedSplatGroupIfNeeded(cached);
       continue;
     }
-    if (layer === "interior") {
-      if (!model.interior) continue;
-      jobs.push({
-        key: interiorAssetKey(modelId),
-        def: {
-          ...model.interior,
-          url: resolveAssetUrl(model.interior, lod),
-        },
-      });
-    } else {
-      const src = color.assets[layer];
-      if (!src) continue;
-      jobs.push({
-        key: getAssetKey(modelId, colorId, layer),
-        def: {
-          ...src,
-          url: resolveAssetUrl(src, lod),
-        },
-      });
-    }
+    jobs.push({
+      key,
+      def: { ...def, url: resolveAssetUrl(def, lod) },
+    });
   }
 
   const n = jobs.length;
@@ -2105,26 +2175,23 @@ async function ensureBookmarkLayersLoaded(
 
 function buildLazyTasks(
   scope: LoadScope,
-  bootModelId: string,
-  preferredColorId: string
+  bootModelId: string
 ): Array<{ key: string; assetDef: AssetDef }> {
   if (!manifest) return [];
   const lod = getLOD();
   const tasks: Array<{ key: string; assetDef: AssetDef }> = [];
 
   const pushModelLayers = (m: ModelDef) => {
-    const color = resolveColorForModel(m, preferredColorId);
-    if (!color) return;
-    const extK = getAssetKey(m.id, color.id, "exterior");
     tasks.push({
-      key: extK,
+      key: splatLayerKey(m.id, "base"),
       assetDef: {
-        ...color.assets.exterior,
-        url: resolveAssetUrl(color.assets.exterior, lod),
+        ...m.base,
+        url: resolveAssetUrl(m.base, lod),
       },
     });
-    // Intentionally skip background detail + interior: they flood the LRU and evict the
-    // active vehicle's motor/exterior; full layers load when the user selects that model.
+    // Intentionally skip background accessories/motor/interior: they flood the
+    // LRU and evict the active vehicle's layers; full layers load when the user
+    // selects that model.
   };
 
   if (scope === "all") {
@@ -2138,8 +2205,8 @@ function buildLazyTasks(
 }
 
 /** Other vehicles’ splats in the background — no progress UI. */
-function runLazyQueue(scope: LoadScope, bootModelId: string, colorId: string): void {
-  const tasks = buildLazyTasks(scope, bootModelId, colorId);
+function runLazyQueue(scope: LoadScope, bootModelId: string): void {
+  const tasks = buildLazyTasks(scope, bootModelId);
   void (async () => {
     for (const { key, assetDef } of tasks) {
       if (assetManager.has(key)) continue;
@@ -2157,16 +2224,22 @@ function runLazyQueue(scope: LoadScope, bootModelId: string, colorId: string): v
 async function bootstrapPresentationGate(
   showDealer: boolean,
   modelId: string,
-  colorId: string,
+  accessoryId: string | null,
   signal: AbortSignal,
   initialBookmarkIndex = 0
 ): Promise<void> {
   if (!manifest || !stateStore) return;
 
-  // Start the mask + color-set fetches ASAP, in parallel with the (much
-  // larger) exterior, so paint is ready the moment the body arrives.
-  void fetchModelMask(modelId);
-  void loadGradeSet(modelId);
+  const model = manifest.models.find((m) => m.id === modelId);
+  if (!model) return;
+
+  // Dormant paint pipeline: start the mask + color-set fetches ASAP (in
+  // parallel with the much larger base body) only when the model declares
+  // color variants.
+  if (model.colors?.length) {
+    void fetchModelMask(modelId);
+    void loadGradeSet(modelId);
+  }
 
   let d = showDealer ? 0 : 1;
   let c = 0;
@@ -2175,7 +2248,7 @@ async function bootstrapPresentationGate(
     loadingOverlay.setProgress(pct);
   };
 
-  const carPromise = loadCarExteriorOnly(modelId, colorId, signal, (t) => {
+  const carPromise = loadCarBaseLayers(modelId, accessoryId, signal, (t) => {
     c = t;
     bump();
   });
@@ -2193,14 +2266,11 @@ async function bootstrapPresentationGate(
     : Promise.resolve();
 
   await Promise.all([dealerPromise, carPromise]);
-  await loadCarShellForModel(modelId);
+  await loadNameplate3dForModel(modelId);
 
-  // Apply the paint (mask + grade + FX) for the initial color before the boot
-  // reveal, so the first paint isn't white (covers deep-links to a color too).
-  await ensurePaintReady(modelId, colorId);
-
-  const model = manifest.models.find((m) => m.id === modelId);
-  if (!model) return;
+  // Apply the paint (mask + grade + FX) before the boot reveal — no-op for
+  // models without declared colors.
+  await ensurePaintReady(modelId, "");
 
   /**
    * If a saved bookmark index was passed in and the model exposes a matching
@@ -2219,23 +2289,34 @@ async function bootstrapPresentationGate(
     ? initialBookmarkIndex
     : 0;
   if (bm) {
-    annotationSystem.setVisibleViews(bm.visibility);
+    annotationSystem.setVisibleViews(annotationViewsFromVisibility(bm.visibility));
     startViewerCameraTravel(bm);
 
-    const extKey = getAssetKey(modelId, colorId, "exterior");
-    const extGroup = assetManager.getCached(extKey);
-    if (bm.visibility.exterior && extGroup) {
-      attachCachedSplatGroupIfNeeded(extGroup);
-      applyBookmarkVisibility(bm, modelId, colorId, {
-        revealOpacityLayers: new Set<AssetLayer>(["exterior"]),
+    // Spread-reveal the freshly loaded base (+ accessory, when one is selected
+    // at boot) together.
+    const revealKinds = new Set<SplatLayerKind>();
+    const revealGroups: THREE.Object3D[] = [];
+    for (const { key, kind } of getModelLayerEntries(model, accessoryId)) {
+      if (kind !== "base" && kind !== "accessory") continue;
+      if (!bm.visibility[kind]) continue;
+      const g = assetManager.getCached(key);
+      if (g) {
+        attachCachedSplatGroupIfNeeded(g);
+        revealKinds.add(kind);
+        revealGroups.push(g);
+      }
+    }
+    if (revealGroups.length > 0) {
+      applyBookmarkVisibility(bm, modelId, accessoryId, {
+        revealOpacityLayers: revealKinds,
       });
-      spreadReveal.start([extGroup], {
-        onComplete: () => applyBookmarkVisibility(bm, modelId, colorId),
+      spreadReveal.start(revealGroups, {
+        onComplete: () => applyBookmarkVisibility(bm, modelId, accessoryId),
       });
     } else {
-      applyBookmarkVisibility(bm, modelId, colorId);
+      applyBookmarkVisibility(bm, modelId, accessoryId);
     }
-    void prefetchPresentationLayersSilently(modelId, colorId, bm, signal);
+    void prefetchPresentationLayersSilently(modelId, accessoryId, bm, signal);
   }
 }
 
@@ -2244,10 +2325,9 @@ async function bootstrapNonPresentation(
   signal: AbortSignal
 ): Promise<void> {
   if (!manifest || !stateStore) return;
-  const { modelId, colorId, viewMode } = stateStore.getState();
+  const { modelId, viewMode } = stateStore.getState();
   const model = manifest.models.find((m) => m.id === modelId);
-  const color = model ? resolveColorForModel(model, colorId) : null;
-  if (!model || !color) return;
+  if (!model) return;
 
   let d = showDealer ? 0 : 1;
   let c = 0;
@@ -2260,14 +2340,16 @@ async function bootstrapNonPresentation(
   const srcAsset =
     viewMode === "interior"
       ? model.interior
-      : viewMode === "detail"
-        ? color.assets.detail
-        : color.assets.exterior;
+      : viewMode === "motor"
+        ? model.motor
+        : model.base;
+  if (!srcAsset) return;
   const assetDef: AssetDef = {
     ...srcAsset,
     url: resolveAssetUrl(srcAsset, lod),
   };
-  const key = getAssetKey(modelId, colorId, viewMode);
+  const kind: SplatLayerKind = viewMode === "exterior" ? "base" : viewMode;
+  const key = splatLayerKey(modelId, kind);
 
   const carPromise = assetManager.loadAsset(key, assetDef, {
     signal,
@@ -2278,8 +2360,8 @@ async function bootstrapNonPresentation(
   }).then(async (group) => {
     hideOtherModels(modelId);
     group.visible = true;
-    await loadCarShellForModel(modelId);
-    const bookmark = model.bookmarks[viewMode];
+    await loadNameplate3dForModel(modelId);
+    const bookmark = model.bookmarks?.[viewMode];
     if (bookmark) {
       cameraBookmarks.focusBookmark(bookmark, () => {
         freeLook.enabled = false;
@@ -2301,7 +2383,7 @@ async function bootstrapNonPresentation(
     : Promise.resolve();
 
   await Promise.all([dealerPromise, carPromise]);
-  await loadCarShellForModel(modelId);
+  await loadNameplate3dForModel(modelId);
 }
 
 async function loadAllPresentationAssets(): Promise<void> {
@@ -2314,78 +2396,56 @@ async function loadAllPresentationAssets(): Promise<void> {
   spreadReveal.cancel();
   layerFade.cancel();
 
-  const { modelId, colorId } = stateStore.getState();
-  await loadCarShellForModel(modelId);
+  const { modelId, accessoryId } = stateStore.getState();
+  await loadNameplate3dForModel(modelId);
   const model = manifest.models.find((m) => m.id === modelId);
-  const color = model ? resolveColorForModel(model, colorId) : null;
-  if (!model || !color || !isPresentationMode(model)) return;
-
-  const extKey = getAssetKey(modelId, colorId, "exterior");
-  const detKey = getAssetKey(modelId, colorId, "detail");
-  const intKey = interiorAssetKey(modelId);
-  const needExt = !assetManager.has(extKey);
-  const needDet = !assetManager.has(detKey);
-  const needInt = !assetManager.has(intKey);
+  if (!model || !isPresentationMode(model)) return;
 
   const bookmarks = model.cameraBookmarks!;
   const bm = bookmarks[currentBookmarkIndex] ?? bookmarks[0];
   if (!bm) return;
 
+  const lod = getLOD();
   /**
-   * Only a layer that is VISIBLE in the current bookmark justifies the
-   * full-screen curtain (and a blocking fetch). A missing-but-hidden layer —
-   * e.g. the per-color `detail` (motor/maletero) while you're looking at the
-   * exterior — is warmed in the background instead, so an exterior color
-   * change is instant: the shared body just swaps its paint grade (mask +
-   * color set are already cached).
+   * Every layer of the active model/accessory selection, with its resolved
+   * URL and whether it still needs fetching. Only a layer that is VISIBLE in
+   * the current bookmark justifies the full-screen curtain (and a blocking
+   * fetch). A missing-but-hidden layer — e.g. the motor splat while you're
+   * looking at the exterior — is warmed in the background instead, so an
+   * accessory swap to a cached attachment is instant.
    */
-  const extBlocks = needExt && bm.visibility.exterior;
-  const detBlocks = needDet && bm.visibility.detail;
-  const intBlocks = needInt && bm.visibility.interior;
-  const useMain = extBlocks || detBlocks || intBlocks;
+  const bmVis = effectiveBookmarkVisibility(bm, accessoryId);
+  const entries = getModelLayerEntries(model, accessoryId).map((e) => ({
+    key: e.key,
+    kind: e.kind,
+    def: { ...e.def, url: resolveAssetUrl(e.def, lod) } as AssetDef,
+    need: !assetManager.has(e.key),
+  }));
+  const blocking = entries.filter((e) => e.need && bmVis[e.kind]);
+  const useMain = blocking.length > 0;
   /** No camera travel when nothing visible needed fetching (instant swap). */
   const shouldMoveCamera = useMain;
 
   hideOtherModels(modelId);
-  hideNonActiveColorSplats(modelId, colorId);
-  // Start the mask + color-set fetches ASAP (in parallel with the exterior) so
-  // they're ready by the time we gate the reveal on them below.
-  void fetchModelMask(modelId);
-  void loadGradeSet(modelId);
+  hideNonActiveAccessorySplats(modelId, accessoryId);
+  // Dormant paint pipeline: start the mask + color-set fetches ASAP so they're
+  // ready by the time we gate the reveal on them below (color models only).
+  if (model.colors?.length) {
+    void fetchModelMask(modelId);
+    void loadGradeSet(modelId);
+  }
 
-  for (const key of [extKey, detKey, intKey]) {
-    const g = assetManager.getCached(key);
+  for (const e of entries) {
+    const g = assetManager.getCached(e.key);
     if (g) attachCachedSplatGroupIfNeeded(g);
   }
 
-  const lod = getLOD();
-  const exteriorDef: AssetDef = {
-    ...color.assets.exterior,
-    url: resolveAssetUrl(color.assets.exterior, lod),
-  };
-  const detailDef: AssetDef = {
-    ...color.assets.detail,
-    url: resolveAssetUrl(color.assets.detail, lod),
-  };
-  const interiorDef: AssetDef = {
-    ...model.interior,
-    url: resolveAssetUrl(model.interior, lod),
-  };
-
-  const nMainJobs =
-    Number(extBlocks) + Number(detBlocks) + Number(intBlocks);
-  const p = {
-    ext: extBlocks ? 0 : 1,
-    det: detBlocks ? 0 : 1,
-    int: intBlocks ? 0 : 1,
-  };
+  const progressByKey = new Map<string, number>();
   const repMain = () => {
-    if (!useMain || nMainJobs === 0) return;
-    const sum =
-      (extBlocks ? p.ext : 0) +
-      (detBlocks ? p.det : 0) +
-      (intBlocks ? p.int : 0);
-    loadingOverlay.setProgress((100 * sum) / nMainJobs);
+    if (!useMain) return;
+    let sum = 0;
+    for (const e of blocking) sum += progressByKey.get(e.key) ?? 0;
+    loadingOverlay.setProgress((100 * sum) / blocking.length);
   };
 
   let usedCurtain = false;
@@ -2398,63 +2458,36 @@ async function loadAllPresentationAssets(): Promise<void> {
   try {
     /**
      * Parallel fetch: AssetManager's semaphore caps concurrency anyway, but
-     * Promise.all lets exterior + detail download together (huge win on color
-     * change, where both are typically uncached and the semaphore has slack).
+     * Promise.all lets base + accessory download together (huge win on the
+     * first accessory selection, where both may be uncached).
      */
     const jobs: Array<Promise<unknown>> = [];
-    /**
-     * Missing but not visible in this bookmark → warm it in the background so
-     * the visible reveal isn't blocked (e.g. the per-color motor splat on a
-     * color change viewed from the exterior).
-     */
-    const warmInBackground = (key: string, def: AssetDef) => {
-      void assetManager.loadAsset(key, def, { signal }).catch(() => {});
-    };
-
-    if (extBlocks) {
-      jobs.push(
-        assetManager.loadAsset(extKey, exteriorDef, {
-          signal,
-          onProgress: (u) => {
-            p.ext = u;
-            repMain();
-          },
-        })
-      );
-    } else if (needExt) {
-      warmInBackground(extKey, exteriorDef);
-    }
-    if (detBlocks) {
-      jobs.push(
-        assetManager.loadAsset(detKey, detailDef, {
-          signal,
-          onProgress: (u) => {
-            p.det = u;
-            repMain();
-          },
-        })
-      );
-    } else if (needDet) {
-      warmInBackground(detKey, detailDef);
-    }
-    if (intBlocks) {
-      jobs.push(
-        assetManager.loadAsset(intKey, interiorDef, {
-          signal,
-          onProgress: (u) => {
-            p.int = u;
-            repMain();
-          },
-        })
-      );
-    } else if (needInt) {
-      warmInBackground(intKey, interiorDef);
+    for (const e of entries) {
+      if (!e.need) continue;
+      if (bmVis[e.kind]) {
+        progressByKey.set(e.key, 0);
+        jobs.push(
+          assetManager.loadAsset(e.key, e.def, {
+            signal,
+            onProgress: (u) => {
+              progressByKey.set(e.key, u);
+              repMain();
+            },
+          })
+        );
+      } else {
+        /**
+         * Missing but not visible in this bookmark → warm it in the
+         * background so the visible reveal isn't blocked.
+         */
+        void assetManager.loadAsset(e.key, e.def, { signal }).catch(() => {});
+      }
     }
     if (jobs.length > 0) await Promise.all(jobs);
 
-    // Apply the paint (mask + grade) for the active model/color BEFORE revealing
-    // so the body never appears white/uncolored on a model or color change.
-    if (!signal.aborted) await ensurePaintReady(modelId, colorId);
+    // Apply the paint (mask + grade) BEFORE revealing — no-op for models
+    // without declared colors.
+    if (!signal.aborted) await ensurePaintReady(modelId, "");
 
     if (bm) {
       if (shouldMoveCamera) {
@@ -2464,49 +2497,46 @@ async function loadAllPresentationAssets(): Promise<void> {
         applyViewerCameraInteraction(bm);
       }
 
-      const spreadLayers = new Set<AssetLayer>();
+      /**
+       * Newly fetched base / accessory / motor layers spread-reveal together;
+       * a newly fetched interior cross-fades instead.
+       */
+      const spreadKinds = new Set<SplatLayerKind>();
       const spreadGroups: THREE.Object3D[] = [];
-      if (needExt && bm.visibility.exterior) {
-        spreadLayers.add("exterior");
-        const g = assetManager.getCached(extKey);
-        if (g) {
-          attachCachedSplatGroupIfNeeded(g);
-          spreadGroups.push(g);
-        }
-      }
-      if (needDet && bm.visibility.detail) {
-        spreadLayers.add("detail");
-        const g = assetManager.getCached(detKey);
-        if (g) {
-          attachCachedSplatGroupIfNeeded(g);
+      let interiorFade = false;
+      let intGroup: THREE.Object3D | undefined;
+      for (const e of entries) {
+        if (!e.need || !bmVis[e.kind]) continue;
+        const g = assetManager.getCached(e.key);
+        if (!g) continue;
+        attachCachedSplatGroupIfNeeded(g);
+        if (e.kind === "interior") {
+          interiorFade = true;
+          intGroup = g;
+        } else {
+          spreadKinds.add(e.kind);
           spreadGroups.push(g);
         }
       }
 
-      const interiorFetchedThisPass = intBlocks;
-      const interiorFade =
-        interiorFetchedThisPass &&
-        bm.visibility.interior &&
-        assetManager.has(intKey);
-      const intGroup = interiorFade ? assetManager.getCached(intKey) : undefined;
-      if (intGroup) attachCachedSplatGroupIfNeeded(intGroup);
-
-      const revealOpacity = new Set(spreadLayers);
+      const revealOpacity = new Set(spreadKinds);
       if (interiorFade) revealOpacity.add("interior");
 
       const useRevealAnim = spreadGroups.length > 0 || interiorFade;
 
       if (useRevealAnim) {
-        applyBookmarkVisibility(bm, modelId, colorId, {
+        applyBookmarkVisibility(bm, modelId, accessoryId, {
           revealOpacityLayers: revealOpacity,
         });
-        annotationSystem.setVisibleViews(bm.visibility);
+        annotationSystem.setVisibleViews(
+          annotationViewsFromVisibility(bm.visibility)
+        );
 
         let pending = 0;
         const done = () => {
           pending--;
           if (pending <= 0) {
-            applyBookmarkVisibility(bm, modelId, colorId);
+            applyBookmarkVisibility(bm, modelId, accessoryId);
           }
         };
 
@@ -2522,15 +2552,17 @@ async function loadAllPresentationAssets(): Promise<void> {
           );
         }
         if (pending <= 0) {
-          applyBookmarkVisibility(bm, modelId, colorId);
+          applyBookmarkVisibility(bm, modelId, accessoryId);
         }
       } else {
-        applyBookmarkVisibility(bm, modelId, colorId);
-        annotationSystem.setVisibleViews(bm.visibility);
+        applyBookmarkVisibility(bm, modelId, accessoryId);
+        annotationSystem.setVisibleViews(
+          annotationViewsFromVisibility(bm.visibility)
+        );
       }
     }
     showroomUI?.update();
-    prefetchSiblingColors(modelId, colorId);
+    prefetchSiblingAccessories(modelId, accessoryId);
   } catch (err) {
     if ((err as Error).name !== "AbortError") {
       console.error("Failed to load presentation assets:", err);
@@ -2550,10 +2582,9 @@ async function loadCurrentAsset(): Promise<void> {
   abortController = new AbortController();
   const signal = abortController.signal;
 
-  const { modelId, colorId, viewMode } = stateStore.getState();
+  const { modelId, accessoryId, viewMode } = stateStore.getState();
   const model = manifest.models.find((m) => m.id === modelId);
-  const color = model ? resolveColorForModel(model, colorId) : null;
-  if (!model || !color) return;
+  if (!model) return;
 
   if (isPresentationMode(model)) {
     await loadAllPresentationAssets();
@@ -2562,24 +2593,48 @@ async function loadCurrentAsset(): Promise<void> {
 
   annotationSystem.setVisibleViews(null);
 
-  let assetDef: AssetDef;
-  if (viewMode === "interior") {
-    assetDef = model.interior;
-  } else {
-    assetDef = color.assets[viewMode];
-  }
+  const assetDef =
+    viewMode === "interior"
+      ? model.interior
+      : viewMode === "motor"
+        ? model.motor
+        : model.base;
   if (!assetDef) return;
 
-  loadingOverlay.show();
-  await loadingOverlay.fadeCurtainToBlack(220);
-
   const lod = getLOD();
-  const resolvedAsset: AssetDef = {
-    ...assetDef,
-    url: resolveAssetUrl(assetDef, lod),
-  };
+  const kind: SplatLayerKind = viewMode === "exterior" ? "base" : viewMode;
 
-  const key = getAssetKey(modelId, colorId, viewMode);
+  /**
+   * Exterior shows base + the selected accessory (one attachment at a time);
+   * `accessoryId === null` ("Ninguno") shows the bare base.
+   */
+  const activeAccessory =
+    viewMode === "exterior" && accessoryId
+      ? model.accessories.find((a) => a.id === accessoryId) ?? null
+      : null;
+
+  const jobs: Array<{ key: string; def: AssetDef }> = [
+    {
+      key: splatLayerKey(modelId, kind),
+      def: { ...assetDef, url: resolveAssetUrl(assetDef, lod) },
+    },
+  ];
+  if (activeAccessory) {
+    jobs.push({
+      key: splatLayerKey(modelId, "accessory", activeAccessory.id),
+      def: {
+        ...activeAccessory.asset,
+        url: resolveAssetUrl(activeAccessory.asset, lod),
+      },
+    });
+  }
+
+  /** Curtain + progress only when something actually needs downloading. */
+  const needFetch = jobs.some((j) => !assetManager.has(j.key));
+  if (needFetch) {
+    loadingOverlay.show();
+    await loadingOverlay.fadeCurtainToBlack(220);
+  }
 
   const splatContainer = runtime.getSplatContainer();
   for (const child of splatContainer.children) {
@@ -2588,15 +2643,32 @@ async function loadCurrentAsset(): Promise<void> {
   }
 
   try {
-    const mesh = await assetManager.loadAsset(key, resolvedAsset, {
-      signal,
-      onProgress: (u) => loadingOverlay.setProgress(u * 100),
-    });
+    const progressByKey = new Map<string, number>();
+    const reportProgress = () => {
+      let sum = 0;
+      for (const j of jobs) sum += progressByKey.get(j.key) ?? 0;
+      loadingOverlay.setProgress((100 * sum) / jobs.length);
+    };
+    const meshes = await Promise.all(
+      jobs.map((j) =>
+        assetManager.loadAsset(j.key, j.def, {
+          signal,
+          onProgress: (u) => {
+            progressByKey.set(j.key, u);
+            reportProgress();
+          },
+        })
+      )
+    );
     hideOtherModels(modelId);
-    mesh.visible = true;
-    await loadCarShellForModel(modelId);
+    hideNonActiveAccessorySplats(modelId, activeAccessory?.id ?? null);
+    for (const mesh of meshes) {
+      attachCachedSplatGroupIfNeeded(mesh);
+      mesh.visible = true;
+    }
+    await loadNameplate3dForModel(modelId);
 
-    const bookmark = model.bookmarks[viewMode];
+    const bookmark = model.bookmarks?.[viewMode];
     if (bookmark) {
       cameraBookmarks.focusBookmark(bookmark, () => {
         freeLook.enabled = false;
@@ -2605,10 +2677,10 @@ async function loadCurrentAsset(): Promise<void> {
       await cameraBookmarks.waitUntilIdle();
     }
 
-    await loadingOverlay.fadeCurtainToClear(280);
+    if (needFetch) await loadingOverlay.fadeCurtainToClear(280);
 
     if (viewMode === "exterior" && model.interior) {
-      const interiorKey = interiorAssetKey(modelId);
+      const interiorKey = splatLayerKey(modelId, "interior");
       const lodResolved = {
         ...model.interior,
         url: resolveAssetUrl(model.interior, lod),
@@ -2616,12 +2688,12 @@ async function loadCurrentAsset(): Promise<void> {
       assetManager.prefetch([{ key: interiorKey, assetDef: lodResolved }]);
     }
 
-    prefetchSiblingColors(modelId, colorId);
+    prefetchSiblingAccessories(modelId, accessoryId);
   } catch (err) {
     if ((err as Error).name !== "AbortError") {
       console.error("Failed to load asset:", err);
     }
-    await loadingOverlay.fadeCurtainToClear(160);
+    if (needFetch) await loadingOverlay.fadeCurtainToClear(160);
   } finally {
     loadingOverlay.hide();
   }
@@ -2731,12 +2803,15 @@ function goToBookmarkIndex(idx: number): void {
   if (!bm) return;
 
   const fromBm = list[currentBookmarkIndex];
-  const fromVis = fromBm?.visibility ?? {
-    exterior: true,
-    detail: true,
-    interior: true,
-  };
-  const toVis = bm.visibility;
+  const fromVis: LayerVisibility = fromBm
+    ? effectiveBookmarkVisibility(fromBm, s.accessoryId)
+    : {
+        base: true,
+        accessory: true,
+        motor: true,
+        interior: true,
+      };
+  const toVis = effectiveBookmarkVisibility(bm, s.accessoryId);
 
   const useCurtain =
     !!m &&
@@ -2755,16 +2830,16 @@ function goToBookmarkIndex(idx: number): void {
     const ensureGen = ++bookmarkEnsureGeneration;
 
     const runLayerFade = (): void => {
-      const layerInfos = getLayerGroups(s.modelId, s.colorId)
-        .map(({ key, layer }) => {
+      const layerInfos = getLayerEntries(s.modelId, s.accessoryId)
+        .map(({ key, kind }) => {
           const group = assetManager.getCached(key);
           if (group) attachCachedSplatGroupIfNeeded(group);
           return {
             group: group!,
-            fromVisible: fromVis[layer],
-            toVisible: toVis[layer],
+            fromVisible: fromVis[kind],
+            toVisible: toVis[kind],
             key,
-            layer,
+            kind,
           };
         })
         .filter((info) => info.group);
@@ -2772,21 +2847,23 @@ function goToBookmarkIndex(idx: number): void {
       layerFade.start(
         layerInfos.map(({ group, fromVisible, toVisible }) => ({ group, fromVisible, toVisible })),
         () => {
-          applyBookmarkVisibility(bm, s.modelId, s.colorId);
-          annotationSystem.setVisibleViews(bm.visibility);
+          applyBookmarkVisibility(bm, s.modelId, s.accessoryId);
+          annotationSystem.setVisibleViews(
+            annotationViewsFromVisibility(bm.visibility)
+          );
         }
       );
     };
 
-    const needEnsure = getLayerGroups(s.modelId, s.colorId).some(({ key, layer }) => {
-      if (!fromVis[layer] && !toVis[layer]) return false;
+    const needEnsure = getLayerEntries(s.modelId, s.accessoryId).some(({ key, kind }) => {
+      if (!fromVis[kind] && !toVis[kind]) return false;
       const g = assetManager.getCached(key);
       if (!g) return true;
       return !g.parent;
     });
 
     if (needEnsure) {
-      void ensureBookmarkLayersLoaded(s.modelId, s.colorId, fromVis, toVis).then(
+      void ensureBookmarkLayersLoaded(s.modelId, s.accessoryId, fromVis, toVis).then(
         () => {
           if (ensureGen !== bookmarkEnsureGeneration) return;
           runLayerFade();
@@ -2832,16 +2909,16 @@ function goToBookmarkIndex(idx: number): void {
     const ensureGen = ++bookmarkEnsureGeneration;
 
     const runLayerFadeOnce = (): void => {
-      const layerInfos = getLayerGroups(s.modelId, s.colorId)
-        .map(({ key, layer }) => {
+      const layerInfos = getLayerEntries(s.modelId, s.accessoryId)
+        .map(({ key, kind }) => {
           const group = assetManager.getCached(key);
           if (group) attachCachedSplatGroupIfNeeded(group);
           return {
             group: group!,
-            fromVisible: fromVis[layer],
-            toVisible: toVis[layer],
+            fromVisible: fromVis[kind],
+            toVisible: toVis[kind],
             key,
-            layer,
+            kind,
           };
         })
         .filter((info) => info.group);
@@ -2849,14 +2926,16 @@ function goToBookmarkIndex(idx: number): void {
       layerFade.start(
         layerInfos.map(({ group, fromVisible, toVisible }) => ({ group, fromVisible, toVisible })),
         () => {
-          applyBookmarkVisibility(bm, s.modelId, s.colorId);
-          annotationSystem.setVisibleViews(bm.visibility);
+          applyBookmarkVisibility(bm, s.modelId, s.accessoryId);
+          annotationSystem.setVisibleViews(
+            annotationViewsFromVisibility(bm.visibility)
+          );
         }
       );
     };
 
-    const needEnsure = getLayerGroups(s.modelId, s.colorId).some(({ key, layer }) => {
-      if (!fromVis[layer] && !toVis[layer]) return false;
+    const needEnsure = getLayerEntries(s.modelId, s.accessoryId).some(({ key, kind }) => {
+      if (!fromVis[kind] && !toVis[kind]) return false;
       const g = assetManager.getCached(key);
       if (!g) return true;
       return !g.parent;
@@ -2865,7 +2944,7 @@ function goToBookmarkIndex(idx: number): void {
     try {
       if (needEnsure) {
         try {
-          await ensureBookmarkLayersLoaded(s.modelId, s.colorId, fromVis, toVis, {
+          await ensureBookmarkLayersLoaded(s.modelId, s.accessoryId, fromVis, toVis, {
             onProgress: (pct) => loadingOverlay.setProgress(pct),
           });
         } catch (e) {
@@ -2924,15 +3003,15 @@ async function handleModelSelectFromModal(m: ModelDef): Promise<void> {
   const state = stateStore.getState();
   if (m.id === state.modelId) return;
 
-  // Always start a new model on its WHITE base body (the color grade is applied
-  // per color afterwards). Kick off the mask fetch immediately so it's ready by
-  // the time the much larger exterior .sog finishes downloading.
-  const whiteColor = m.colors.find(
-    (c) => c.id === "white" || c.assets.exterior.url.includes("white_ext")
-  );
-  const colorId = whiteColor?.id ?? resolveDefaultColorId(m.colors) ?? state.colorId;
-  void fetchModelMask(m.id);
-  void loadGradeSet(m.id);
+  // A new model always boots on its bare base body — accessories are
+  // per-model, so the selection resets to "none".
+  const accessoryId: string | null = null;
+  // Dormant paint pipeline: only kick the mask/grade fetches for models that
+  // declare color variants.
+  if (m.colors?.length) {
+    void fetchModelMask(m.id);
+    void loadGradeSet(m.id);
+  }
 
   appRoot.classList.add("viewer-busy");
   abortController?.abort();
@@ -2953,50 +3032,51 @@ async function handleModelSelectFromModal(m: ModelDef): Promise<void> {
 
   try {
     let c = 0;
-    const loadP = loadCarExteriorOnly(m.id, colorId, signal, (t) => {
+    const loadP = loadCarBaseLayers(m.id, accessoryId, signal, (t) => {
       c = t;
       loadingOverlay.setProgress(100 * c);
     });
     const camP = bm ? cameraTravel.waitUntilIdle() : Promise.resolve();
     await Promise.all([loadP, camP]);
-    await loadCarShellForModel(m.id);
+    await loadNameplate3dForModel(m.id);
 
     if (bm) {
-      annotationSystem.setVisibleViews(bm.visibility);
-      const extKey = getAssetKey(m.id, colorId, "exterior");
-      const extGroup = assetManager.getCached(extKey);
-      if (bm.visibility.exterior && extGroup) {
-        attachCachedSplatGroupIfNeeded(extGroup);
-        applyBookmarkVisibility(bm, m.id, colorId, {
-          revealOpacityLayers: new Set<AssetLayer>(["exterior"]),
+      annotationSystem.setVisibleViews(
+        annotationViewsFromVisibility(bm.visibility)
+      );
+      const baseKey = splatLayerKey(m.id, "base");
+      const baseGroup = assetManager.getCached(baseKey);
+      if (bm.visibility.base && baseGroup) {
+        attachCachedSplatGroupIfNeeded(baseGroup);
+        applyBookmarkVisibility(bm, m.id, accessoryId, {
+          revealOpacityLayers: new Set<SplatLayerKind>(["base"]),
         });
-        spreadReveal.start([extGroup], {
-          onComplete: () => applyBookmarkVisibility(bm, m.id, colorId),
+        spreadReveal.start([baseGroup], {
+          onComplete: () => applyBookmarkVisibility(bm, m.id, accessoryId),
         });
       } else {
-        applyBookmarkVisibility(bm, m.id, colorId);
+        applyBookmarkVisibility(bm, m.id, accessoryId);
       }
     }
     currentBookmarkIndex = 0;
     modelSwitchSuppressed = true;
     stateStore.update({
       modelId: m.id,
-      colorId,
+      accessoryId,
       viewMode: "exterior",
     });
 
-    // Gate the reveal on the mask: don't clear the curtain until the paint mask
-    // is fully loaded (white base — no grade). The mask fetch was kicked off at
-    // the top, so this usually resolves immediately. Done after stateStore.update
-    // so applyPaintGrade's stale-state guard sees the new model/color.
-    if (!signal.aborted) await ensurePaintReady(m.id, colorId);
+    // Gate the reveal on the paint mask when the model declares colors (no-op
+    // otherwise). Done after stateStore.update so applyPaintGrade's
+    // stale-state guard sees the new model.
+    if (!signal.aborted) await ensurePaintReady(m.id, "");
 
     await loadingOverlay.fadeCurtainToClear(280);
     runtime.scheduleSettleRenders();
 
     if (isPresentationMode(m) && bm) {
       appRoot.classList.remove("viewer-busy");
-      void prefetchPresentationLayersSilently(m.id, colorId, bm, signal);
+      void prefetchPresentationLayersSilently(m.id, accessoryId, bm, signal);
     } else {
       await loadCurrentAsset();
     }
@@ -3021,8 +3101,9 @@ function buildShowroomUI(handlers: {
   const dock = document.createElement("div");
   dock.className = "showroom-dock";
 
-  const colorRow = document.createElement("div");
-  colorRow.className = "showroom-color-row";
+  /** Accessory selector: one text chip per attachment + a "Ninguno" (base only) chip. */
+  const accessoryRow = document.createElement("div");
+  accessoryRow.className = "showroom-acc-row";
 
   const navShell = document.createElement("div");
   navShell.className = "showroom-nav-shell";
@@ -3078,7 +3159,7 @@ function buildShowroomUI(handlers: {
   navRow.appendChild(modelBtn);
 
   navShell.appendChild(navRow);
-  dock.appendChild(colorRow);
+  dock.appendChild(accessoryRow);
   dock.appendChild(navShell);
   viewerStage.appendChild(dock);
 
@@ -3129,23 +3210,32 @@ function buildShowroomUI(handlers: {
     const bookmarks = model?.cameraBookmarks ?? [];
     const hasBookmarks = bookmarks.length > 0;
 
-    colorRow.innerHTML = "";
-    if (model && model.colors.length > 1) {
-      for (const c of model.colors) {
-        const dot = document.createElement("button");
-        dot.type = "button";
-        dot.className =
-          "showroom-color-dot" + (c.id === state.colorId ? " selected" : "");
-        dot.style.backgroundColor = resolveSwatchHex(state.modelId, c.id);
-        dot.title = c.name;
-        dot.addEventListener("click", () => {
-          stateStore!.setColor(c.id);
+    accessoryRow.innerHTML = "";
+    const accessories = model?.accessories ?? [];
+    if (model && accessories.length > 0) {
+      const makeChip = (label: string, accId: string | null): void => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className =
+          "showroom-acc-chip" +
+          ((state.accessoryId ?? null) === accId ? " selected" : "");
+        chip.textContent = label;
+        chip.setAttribute(
+          "aria-label",
+          accId === null ? "Sin accesorio (solo base)" : `Accesorio: ${label}`
+        );
+        chip.addEventListener("click", () => {
+          stateStore!.setAccessory(accId);
         });
-        colorRow.appendChild(dot);
+        accessoryRow.appendChild(chip);
+      };
+      makeChip("Ninguno", null);
+      for (const acc of accessories) {
+        makeChip(acc.name, acc.id);
       }
-      colorRow.style.display = "";
+      accessoryRow.style.display = "";
     } else {
-      colorRow.style.display = "none";
+      accessoryRow.style.display = "none";
     }
 
     if (hasBookmarks) {
@@ -3223,11 +3313,22 @@ function buildShowroomUI(handlers: {
       card.className =
         "showroom-modal-card" + (mm.id === state.modelId ? " active" : "");
 
-      const thumb = document.createElement("img");
-      thumb.className = "showroom-modal-thumb";
-      thumb.src = THUMBNAIL_MAP[mm.id] ?? "";
-      thumb.alt = mm.name;
-      thumb.loading = "lazy";
+      /** Unknown ids fall back gracefully: no thumbnail → text placeholder. */
+      const thumbSrc = THUMBNAIL_MAP[mm.id];
+      let thumb: HTMLElement;
+      if (thumbSrc) {
+        const img = document.createElement("img");
+        img.className = "showroom-modal-thumb";
+        img.src = thumbSrc;
+        img.alt = mm.name;
+        img.loading = "lazy";
+        thumb = img;
+      } else {
+        const ph = document.createElement("div");
+        ph.className = "showroom-modal-thumb showroom-modal-thumb--placeholder";
+        ph.textContent = mm.name;
+        thumb = ph;
+      }
 
       const label = document.createElement("div");
       label.className = "showroom-modal-label";
@@ -3241,6 +3342,7 @@ function buildShowroomUI(handlers: {
         plate.loading = "lazy";
         label.appendChild(plate);
       } else {
+        /** No nameplate SVG → the model name from the manifest as text. */
         label.classList.add("showroom-modal-label--text");
         label.textContent = DISPLAY_NAMES[mm.id] ?? mm.name.toUpperCase();
       }
@@ -3289,11 +3391,11 @@ async function init(): Promise<void> {
   const urlOpts = resolveShowroomUrlParams(
     manifest,
     savedView
-      ? { modelId: savedView.modelId, colorId: savedView.colorId }
+      ? { modelId: savedView.modelId, accessoryId: savedView.accessoryId }
       : undefined
   );
   urlLoadScope = urlOpts.loadScope;
-  hideCarShellGlbWhenDealership = urlOpts.showDealership;
+  hideNameplate3dGlbWhenDealership = urlOpts.showDealership;
 
   /**
    * Resolve the bookmark + viewMode to restore. Precedence:
@@ -3321,7 +3423,7 @@ async function init(): Promise<void> {
 
   stateStore = new StateStore({
     modelId: urlOpts.modelId,
-    colorId: urlOpts.colorId,
+    accessoryId: urlOpts.accessoryId,
     viewMode: initialViewMode,
   });
 
@@ -3338,16 +3440,24 @@ async function init(): Promise<void> {
   const bootModel = manifest.models.find((m) => m.id === urlOpts.modelId);
 
   /**
-   * Kick off the boot exterior download via <link rel=preload> the instant
+   * Kick off the boot base-body download via <link rel=preload> the instant
    * we know the URL — runs in parallel with scene bootstrap, so the first
-   * paint of the car arrives a full RTT sooner. Spark's later fetch() in
+   * paint of the truck arrives a full RTT sooner. Spark's later fetch() in
    * AssetManager dedupes against this in-flight request.
    */
   if (bootModel) {
-    const bootColor = resolveColorForModel(bootModel, urlOpts.colorId);
-    if (bootColor) {
-      const ext = bootColor.assets.exterior;
-      if (ext) preloadSplat(resolveSplatAssetUrl(resolveAssetUrl(ext, getLOD())));
+    preloadSplat(
+      resolveSplatAssetUrl(resolveAssetUrl(bootModel.base, getLOD()))
+    );
+    if (urlOpts.accessoryId) {
+      const bootAcc = bootModel.accessories.find(
+        (a) => a.id === urlOpts.accessoryId
+      );
+      if (bootAcc) {
+        preloadSplat(
+          resolveSplatAssetUrl(resolveAssetUrl(bootAcc.asset, getLOD()))
+        );
+      }
     }
   }
 
@@ -3356,7 +3466,7 @@ async function init(): Promise<void> {
       await bootstrapPresentationGate(
         urlOpts.showDealership,
         urlOpts.modelId,
-        urlOpts.colorId,
+        urlOpts.accessoryId,
         bootSignal,
         initialBookmarkIndex
       );
@@ -3389,7 +3499,7 @@ async function init(): Promise<void> {
   if (model) {
     annotationSystem.setAnnotations(model.annotations);
     annotationSystem.setViewMode(state.viewMode);
-    annotationSystem.setBookmarks(model.bookmarks);
+    annotationSystem.setBookmarks(model.bookmarks ?? null);
   }
 
   showroomUI.update();
@@ -3419,7 +3529,8 @@ async function init(): Promise<void> {
         runtime.renderer.render(runtime.scene, runtime.camera);
       },
       getCurrentModelId: () => stateStore!.getState().modelId,
-      getCurrentColorId: () => stateStore!.getState().colorId,
+      // Colors are dormant — report the active accessory (or empty) instead.
+      getCurrentColorId: () => stateStore!.getState().accessoryId ?? "",
     });
   }
 
@@ -3431,7 +3542,7 @@ async function init(): Promise<void> {
     if (m) {
       annotationSystem.setAnnotations(m.annotations);
       annotationSystem.setViewMode(st.viewMode);
-      annotationSystem.setBookmarks(m.bookmarks);
+      annotationSystem.setBookmarks(m.bookmarks ?? null);
     }
     showroomUI?.update();
     chatbotPanel?.updateContext();
@@ -3444,7 +3555,7 @@ async function init(): Promise<void> {
   persistCurrentView();
 
   syncPresentationCacheProtectKeys();
-  runLazyQueue(urlLoadScope, urlOpts.modelId, urlOpts.colorId);
+  runLazyQueue(urlLoadScope, urlOpts.modelId);
 
   reapplyOrbitZoomFromActiveBookmark = () => {
     if (!manifest || !stateStore) return;

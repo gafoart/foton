@@ -7,15 +7,19 @@ import type {
   TransformDef,
   NamedCameraBookmark,
   CameraInteractionMode,
+  SplatLayerKind,
 } from "@changan/shared";
-import { resolveDefaultColorId } from "@changan/shared";
 
-export type ActiveAssetType = "exterior" | "detail" | "interior";
+/** Identifies one editable splat layer of a model. */
+export interface ActiveLayerRef {
+  kind: SplatLayerKind;
+  /** Required when `kind === "accessory"`. */
+  accessoryId?: string;
+}
 
 export interface EditorState {
   modelId: string;
-  colorId: string;
-  activeAsset: ActiveAssetType;
+  activeLayer: ActiveLayerRef;
   mode: "transform" | "bookmark" | "annotation";
 }
 
@@ -42,8 +46,7 @@ export class EditorRuntime {
     this.onManifestChange = onManifestChange;
     this._state = {
       modelId: manifest.defaults.modelId,
-      colorId: manifest.defaults.colorId,
-      activeAsset: "exterior",
+      activeLayer: { kind: "base" },
       mode: "transform",
     };
   }
@@ -53,7 +56,7 @@ export class EditorRuntime {
   }
 
   get state(): EditorState {
-    return { ...this._state };
+    return { ...this._state, activeLayer: { ...this._state.activeLayer } };
   }
 
   get runtimeRef(): SceneRuntime {
@@ -69,48 +72,41 @@ export class EditorRuntime {
   }
 
   setModel(modelId: string): void {
-    const model = this._manifest.models.find((m) => m.id === modelId);
-    const colorId = model?.colors.length
-      ? resolveDefaultColorId(model.colors)
-      : this._state.colorId;
     this._state.modelId = modelId;
-    this._state.colorId = colorId;
+    this._state.activeLayer = { kind: "base" };
   }
 
-  setColor(colorId: string): void {
-    this._state.colorId = colorId;
+  setActiveLayer(layer: ActiveLayerRef): void {
+    this._state.activeLayer = { ...layer };
   }
 
-  setActiveAsset(asset: ActiveAssetType): void {
-    this._state.activeAsset = asset;
+  getActiveAssetDef(): AssetDef | null {
+    const { modelId, activeLayer } = this._state;
+    const model = this._manifest.models.find((m) => m.id === modelId);
+    if (!model) return null;
+    switch (activeLayer.kind) {
+      case "base":
+        return model.base;
+      case "motor":
+        return model.motor ?? null;
+      case "interior":
+        return model.interior ?? null;
+      case "accessory":
+        return (
+          model.accessories.find((a) => a.id === activeLayer.accessoryId)
+            ?.asset ?? null
+        );
+    }
   }
 
   setMode(mode: EditorState["mode"]): void {
     this._state.mode = mode;
   }
 
-  getActiveAssetDef(): AssetDef | null {
-    const { modelId, colorId, activeAsset } = this._state;
-    const model = this._manifest.models.find((m) => m.id === modelId);
-    if (!model) return null;
-    if (activeAsset === "interior") return model.interior;
-    const color = model.colors.find((c) => c.id === colorId);
-    if (!color) return null;
-    return color.assets[activeAsset] ?? null;
-  }
-
   updateTransform(transform: TransformDef): void {
-    const { modelId, colorId, activeAsset } = this._state;
-    const model = this._manifest.models.find((m) => m.id === modelId);
-    if (!model) return;
-
-    if (activeAsset === "interior") {
-      model.interior.transform = { ...transform };
-    } else {
-      const color = model.colors.find((c) => c.id === colorId);
-      if (!color) return;
-      color.assets[activeAsset].transform = { ...transform };
-    }
+    const assetDef = this.getActiveAssetDef();
+    if (!assetDef) return;
+    assetDef.transform = { ...transform };
     this.onManifestChange?.(this._manifest);
   }
 
@@ -143,6 +139,7 @@ export class EditorRuntime {
   updateBookmark(view: ViewMode, pos: [number, number, number], target: [number, number, number]): void {
     const model = this._manifest.models.find((m) => m.id === this._state.modelId);
     if (!model) return;
+    if (!model.bookmarks) model.bookmarks = {};
     model.bookmarks[view] = { pos, target };
     this.onManifestChange?.(this._manifest);
   }
@@ -156,7 +153,7 @@ export class EditorRuntime {
     name: string,
     pos: [number, number, number],
     target: [number, number, number],
-    visibility: Record<ActiveAssetType, boolean>,
+    visibility: Record<SplatLayerKind, boolean>,
     constraints?: { azimuthMin?: number; azimuthMax?: number; polarMin?: number; polarMax?: number },
     dof?: { focalDistance?: number; apertureSize?: number },
     lens?: { fov?: number; minDistance?: number; maxDistance?: number },
@@ -230,7 +227,7 @@ export class EditorRuntime {
       name: string;
       pos: [number, number, number];
       target: [number, number, number];
-      visibility: Record<ActiveAssetType, boolean>;
+      visibility: Record<SplatLayerKind, boolean>;
       azimuthMin: number;
       azimuthMax: number;
       polarMin: number;
@@ -321,7 +318,7 @@ export class EditorRuntime {
   setManifest(manifest: SceneManifest): void {
     this._manifest = manifest;
     this._state.modelId = manifest.defaults.modelId;
-    this._state.colorId = manifest.defaults.colorId;
+    this._state.activeLayer = { kind: "base" };
     this.onManifestChange?.(this._manifest);
   }
 
@@ -331,6 +328,6 @@ export class EditorRuntime {
   restoreManifest(manifest: SceneManifest): void {
     this._manifest = manifest;
     this._state.modelId = manifest.defaults.modelId;
-    this._state.colorId = manifest.defaults.colorId;
+    this._state.activeLayer = { kind: "base" };
   }
 }

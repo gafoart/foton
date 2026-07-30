@@ -56,27 +56,6 @@ export class ManifestDraft {
     this.persist();
   }
 
-  copyTransformsFromColor(
-    modelId: string,
-    fromColorId: string,
-    toColorIds: string[]
-  ): void {
-    const model = this._manifest.models.find((m) => m.id === modelId);
-    if (!model) return;
-    const fromColor = model.colors.find((c) => c.id === fromColorId);
-    if (!fromColor) return;
-
-    for (const toColorId of toColorIds) {
-      if (toColorId === fromColorId) continue;
-      const toColor = model.colors.find((c) => c.id === toColorId);
-      if (!toColor) continue;
-
-      toColor.assets.exterior.transform = { ...fromColor.assets.exterior.transform };
-      toColor.assets.detail.transform = { ...fromColor.assets.detail.transform };
-    }
-    this.onChange?.(this._manifest);
-  }
-
   updateDealershipTransform(transform: TransformDef): void {
     if (!this._manifest.dealership) {
       this._manifest.dealership = { transform: { ...transform } };
@@ -145,10 +124,10 @@ export class ManifestDraft {
     this.persist();
   }
 
-  updateCarShellTransform(modelId: string, transform: TransformDef): void {
+  updateNameplate3dTransform(modelId: string, transform: TransformDef): void {
     const model = this._manifest.models.find((m) => m.id === modelId);
     if (!model) return;
-    model.carShell = { transform: { ...transform } };
+    model.nameplate3d = { ...(model.nameplate3d ?? {}), transform: { ...transform } };
     this.onChange?.(this._manifest);
     this.persist();
   }
@@ -227,10 +206,9 @@ export class ManifestDraft {
 
 function createEmptyManifest(): SceneManifest {
   return {
-    version: 1,
+    version: 2,
     defaults: {
       modelId: "",
-      colorId: "",
       view: "exterior",
     },
     models: [],

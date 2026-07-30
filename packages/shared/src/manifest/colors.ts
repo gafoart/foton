@@ -54,7 +54,7 @@ export function resolveDefaultColorId(colors: { id: string }[]): string {
 }
 
 export function resolveDefaultColorIdForModel(
-  model: { colors: { id: string }[] } | undefined,
+  model: { colors?: { id: string }[] } | undefined,
   preferred: string | undefined
 ): string {
   if (!model?.colors?.length) return preferred ?? "";

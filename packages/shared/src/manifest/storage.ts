@@ -1,7 +1,7 @@
 import { validateManifestSafe } from "./validate.js";
 import type { SceneManifest } from "./types.js";
 
-export const MANIFEST_STORAGE_KEY = "changan-splat-manifest-draft";
+export const MANIFEST_STORAGE_KEY = "foton-splat-manifest-draft";
 
 export function loadManifestFromStorage(
   key: string = MANIFEST_STORAGE_KEY

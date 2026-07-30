@@ -8,17 +8,6 @@ import { prefersLightweightScene } from "../scene/LODSelector.js";
 
 export type LoadScope = "all" | "single";
 
-/**
- * Whitelist for the `?color=` URL param. Anything outside this set is rejected
- * and the resolver falls back to "white". This is intentionally stricter than
- * the manifest's per-model color list so that shared links always normalise to
- * one of five canonical IDs even if a particular model is missing one (the
- * post-resolution step then tries to match against the model's actual colors).
- */
-export const ALLOWED_URL_COLORS = ["white", "black", "red", "grey", "silver"] as const;
-export type AllowedUrlColor = (typeof ALLOWED_URL_COLORS)[number];
-const DEFAULT_URL_COLOR: AllowedUrlColor = "white";
-
 export type UrlViewParam = "ext" | "motor" | "trunk" | "int";
 const ALLOWED_URL_VIEWS: readonly UrlViewParam[] = ["ext", "motor", "trunk", "int"];
 
@@ -36,7 +25,8 @@ export interface ResolvedShowroomUrlParams {
   loadScope: LoadScope;
   /** Boot model id (manifest casing) */
   modelId: string;
-  colorId: string;
+  /** Boot accessory id (manifest casing) or null for base-only. */
+  accessoryId: string | null;
   /** Initial scene viewMode (drives default asset/layer selection). */
   viewMode: ViewMode;
   /** Index into the chosen model's `cameraBookmarks` array. 0 if unresolved. */
@@ -56,20 +46,20 @@ function findModelIdCaseInsensitive(
   return manifest.models.find((m) => m.id.toLowerCase() === lower)?.id;
 }
 
-function findColorIdCaseInsensitive(
+function findAccessoryIdCaseInsensitive(
   model: ModelDef,
   raw: string
 ): string | undefined {
   const lower = raw.toLowerCase();
-  return model.colors.find((c) => c.id.toLowerCase() === lower)?.id;
+  return model.accessories.find((a) => a.id.toLowerCase() === lower)?.id;
 }
 
 /**
  * Map a `?view=` value to a bookmark index inside the model's
  * `cameraBookmarks` array, using the bookmark `visibility` flags:
- *   - `ext`   → first bookmark whose visibility.exterior is true
- *   - `trunk` → first bookmark whose visibility.detail   is true
- *   - `motor` → second bookmark whose visibility.detail  is true
+ *   - `ext`   → first bookmark whose visibility.base is true and interior is not
+ *   - `trunk` → first bookmark whose visibility.motor is true
+ *   - `motor` → second bookmark whose visibility.motor is true (falls back to the first)
  *   - `int`   → first bookmark whose visibility.interior is true
  *
  * Returns `-1` when the requested slot does not exist on this model (caller
@@ -80,23 +70,27 @@ function bookmarkIndexForUrlView(
   view: UrlViewParam
 ): number {
   if (bookmarks.length === 0) return -1;
-  let detailHits = 0;
+  let motorHits = 0;
+  let firstMotorIdx = -1;
   for (let i = 0; i < bookmarks.length; i++) {
     const vis = bookmarks[i].visibility;
-    if (view === "ext" && vis.exterior) return i;
+    if (view === "ext" && vis.base && !vis.interior) return i;
     if (view === "int" && vis.interior) return i;
-    if ((view === "motor" || view === "trunk") && vis.detail) {
-      detailHits++;
-      if (view === "trunk" && detailHits === 1) return i;
-      if (view === "motor" && detailHits === 2) return i;
+    if ((view === "motor" || view === "trunk") && vis.motor) {
+      motorHits++;
+      if (firstMotorIdx === -1) firstMotorIdx = i;
+      if (view === "trunk" && motorHits === 1) return i;
+      if (view === "motor" && motorHits === 2) return i;
     }
   }
+  /** `motor` with only one motor bookmark → use that one. */
+  if (view === "motor") return firstMotorIdx;
   return -1;
 }
 
 function viewModeFromBookmark(bm: NamedCameraBookmark): ViewMode {
   if (bm.visibility.interior) return "interior";
-  if (bm.visibility.detail) return "detail";
+  if (bm.visibility.motor) return "motor";
   return "exterior";
 }
 
@@ -108,26 +102,26 @@ function viewModeFromBookmark(bm: NamedCameraBookmark): ViewMode {
  *   (splats + floor/ceiling); mobile loads the backdrop (`blackdrop.glb`).
  * - If either key is present, only `=1` enables that mode (same as before); the other stays off unless also `=1`.
  *
- * **Model / color / view (new in 2026-05)**
+ * **Model / accessory / view**
  * - `?model=<id>`  picks a specific model. Aliased to legacy `?load=<id>`; `?load=all` keeps its
  *   special meaning (preload every car). When `model` is missing, the resolver falls back to the
  *   `fallback.modelId` (saved last view) and then to `manifest.defaults.modelId`.
- * - `?color=<white|black|red|grey|silver>` — strictly one of those five literals. Anything else
- *   falls back to `white`. If the selected model does not expose the requested color, the resolver
- *   falls back to `white`, then to that model's first color.
+ * - `?acc=<accessoryId>` — validated (case-insensitive) against the chosen model's accessories.
+ *   Unknown values fall back to base-only. When omitted, the saved last view's accessory (if it
+ *   still exists on the model) and then `manifest.defaults.accessoryId` apply.
  * - `?view=<ext|motor|trunk|int>` — picks a programmed camera by layer ordering (see
  *   {@link bookmarkIndexForUrlView}). When set successfully, this overrides any saved bookmark
  *   index from `fallback`; when missing/invalid, the resolver returns `initialBookmarkIndex: 0`
  *   and consumers can decide whether to honour the saved index.
  *
  * **Fallback (restored from last session)**
- * - URL params always win over `fallback`. When `model` or `color` is omitted from the URL, the
+ * - URL params always win over `fallback`. When `model` or `acc` is omitted from the URL, the
  *   resolver uses the fallback if it validates against the manifest. This lets a tab reload
- *   restore the last-viewed model + color while keeping shared links deterministic.
+ *   restore the last-viewed model + accessory while keeping shared links deterministic.
  */
 export interface ShowroomUrlFallback {
   modelId?: string;
-  colorId?: string;
+  accessoryId?: string | null;
 }
 
 export function resolveShowroomUrlParams(
@@ -154,6 +148,9 @@ export function resolveShowroomUrlParams(
     showBackdrop = hasBackdropParam && params.get("backdrop") === "1";
   }
 
+  const fallbackModelId = (): string =>
+    manifest.defaults.modelId || manifest.models[0]?.id || "";
+
   /**
    * `model` is the new explicit alias; `load` keeps the old "all" semantics
    * and also accepts a model id for backward compat with shared links. The
@@ -163,13 +160,13 @@ export function resolveShowroomUrlParams(
   const loadRaw = params.get("load");
 
   let loadScope: LoadScope = "single";
-  let modelId = manifest.defaults.modelId;
+  let modelId = fallbackModelId();
 
   const applyFallbackOrDefault = (): void => {
-    const fallbackModelId = fallback?.modelId
+    const saved = fallback?.modelId
       ? findModelIdCaseInsensitive(manifest, fallback.modelId)
       : undefined;
-    modelId = fallbackModelId ?? manifest.defaults.modelId;
+    modelId = saved ?? fallbackModelId();
   };
 
   if (modelRaw && modelRaw.length > 0) {
@@ -187,61 +184,47 @@ export function resolveShowroomUrlParams(
     applyFallbackOrDefault();
   } else if (loadRaw.toLowerCase() === "all") {
     loadScope = "all";
-    const alsvin = findModelIdCaseInsensitive(manifest, "alsvin");
-    modelId = alsvin ?? manifest.models[0]?.id ?? manifest.defaults.modelId;
+    modelId = fallbackModelId();
   } else {
     const found = findModelIdCaseInsensitive(manifest, loadRaw);
     if (found) {
       modelId = found;
     } else {
       console.warn(
-        `[viewer] Unknown load model "${loadRaw}", falling back to defaults / alsvin`
+        `[viewer] Unknown load model "${loadRaw}", falling back to defaults`
       );
-      const alsvin = findModelIdCaseInsensitive(manifest, "alsvin");
-      modelId = alsvin ?? manifest.defaults.modelId;
+      modelId = fallbackModelId();
     }
   }
 
-  const modelForColor = manifest.models.find((m) => m.id === modelId);
+  const model = manifest.models.find((m) => m.id === modelId);
 
   /**
-   * Color resolution. URL `?color=` is constrained to the five canonical
-   * values; anything else degrades to "white". After that we project onto
-   * the chosen model's actual color list (case-insensitive), falling back
-   * to "white" and then the model's first color if the requested one is
-   * not available on this car.
+   * Accessory resolution. `?acc=` wins; the value must exist on the chosen
+   * model or we fall back to base-only. Without a URL param, the saved last
+   * view's accessory (validated) applies, then the manifest default
+   * (`defaults.accessoryId`, also validated), then base-only (null).
    */
-  let colorId = manifest.defaults.colorId;
-  const colorRaw = params.get("color");
-  if (colorRaw && colorRaw.length > 0) {
-    const lowered = colorRaw.toLowerCase();
-    const requested = (ALLOWED_URL_COLORS as readonly string[]).includes(lowered)
-      ? (lowered as AllowedUrlColor)
-      : DEFAULT_URL_COLOR;
-    if (requested !== lowered) {
+  let accessoryId: string | null = null;
+  const accRaw = params.get("acc");
+  if (accRaw && accRaw.length > 0) {
+    const matched = model
+      ? findAccessoryIdCaseInsensitive(model, accRaw)
+      : undefined;
+    if (matched) {
+      accessoryId = matched;
+    } else {
       console.warn(
-        `[viewer] Unsupported color "${colorRaw}" — only ${ALLOWED_URL_COLORS.join(", ")} are accepted; falling back to ${DEFAULT_URL_COLOR}`
+        `[viewer] Unknown accessory "${accRaw}" for model "${modelId}", showing base only`
       );
     }
-    if (modelForColor) {
-      const matched =
-        findColorIdCaseInsensitive(modelForColor, requested) ??
-        findColorIdCaseInsensitive(modelForColor, DEFAULT_URL_COLOR) ??
-        modelForColor.colors[0]?.id;
-      if (matched) colorId = matched;
-    }
-  } else if (fallback?.colorId && modelForColor) {
-    const fallbackColor = findColorIdCaseInsensitive(modelForColor, fallback.colorId);
-    if (fallbackColor) colorId = fallbackColor;
-  } else if (modelForColor) {
-    /**
-     * No URL color, no fallback. Prefer the model's "white" if it has one
-     * so the showroom always opens on a neutral color, matching the
-     * specification of `?model=<id>` (defaults to white).
-     */
-    const white = findColorIdCaseInsensitive(modelForColor, DEFAULT_URL_COLOR);
-    if (white) colorId = white;
-    else if (modelForColor.colors[0]) colorId = modelForColor.colors[0].id;
+  } else if (fallback?.accessoryId && model) {
+    accessoryId =
+      findAccessoryIdCaseInsensitive(model, fallback.accessoryId) ?? null;
+  } else if (manifest.defaults.accessoryId && model) {
+    accessoryId =
+      findAccessoryIdCaseInsensitive(model, manifest.defaults.accessoryId) ??
+      null;
   }
 
   /**
@@ -257,7 +240,7 @@ export function resolveShowroomUrlParams(
   if (viewRaw && viewRaw.length > 0) {
     const lowered = viewRaw.toLowerCase() as UrlViewParam;
     if ((ALLOWED_URL_VIEWS as readonly string[]).includes(lowered)) {
-      const bookmarks = modelForColor?.cameraBookmarks ?? [];
+      const bookmarks = model?.cameraBookmarks ?? [];
       const idx = bookmarkIndexForUrlView(bookmarks, lowered);
       if (idx >= 0) {
         initialBookmarkIndex = idx;
@@ -280,7 +263,7 @@ export function resolveShowroomUrlParams(
     showBackdrop,
     loadScope,
     modelId,
-    colorId,
+    accessoryId,
     viewMode,
     initialBookmarkIndex,
     urlViewExplicit,

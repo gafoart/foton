@@ -1,12 +1,13 @@
-import type { ActiveAssetType } from "./EditorRuntime.js";
+import type { SplatLayerKind } from "@changan/shared";
 
 export interface AssetLayerInfo {
   url: string;
   label: string;
-  colorId?: string;
-  assetType: ActiveAssetType;
-  /** Optional `{modelId}.glb` mesh row (not a splat asset). */
-  isCarShell?: boolean;
+  kind: SplatLayerKind;
+  /** Set when `kind === "accessory"`. */
+  accessoryId?: string;
+  /** Optional `{modelId}.glb` 3D nameplate row (not a splat asset). */
+  isNameplate3d?: boolean;
   /** Manifest-driven floor shadow disk (not a splat URL). */
   isContactShadow?: boolean;
 }
@@ -107,7 +108,7 @@ export function createAssetsLayerPanel(options: {
   setActive: (modelId: string, layer: AssetLayerInfo) => void;
   setVisibility: (modelId: string, layer: AssetLayerInfo, visible: boolean, persist?: boolean) => void;
   getVisibility: (modelId: string, layer: AssetLayerInfo) => boolean;
-  getVisibilityByAssetType: (modelId: string, assetType: ActiveAssetType) => boolean;
+  getVisibilityByKind: (modelId: string, kind: SplatLayerKind) => boolean;
   ensureGroupVisible: (modelId: string) => void;
   refresh: () => void;
   refreshVisibility: () => void;
@@ -142,7 +143,10 @@ export function createAssetsLayerPanel(options: {
   modelsLabel.textContent = "Models";
   body.appendChild(modelsLabel);
 
-  type RowState = { row: HTMLElement; eyeBtn: HTMLElement; label: HTMLElement };
+  /** `visible` mirrors the eye icon — the state the user SEES (bookmark masks
+   *  update it via setVisibility without persisting), so a toggle always flips
+   *  relative to what's on screen. */
+  type RowState = { row: HTMLElement; eyeBtn: HTMLElement; label: HTMLElement; visible: boolean };
   const rowsByModel: Record<string, Record<string, RowState>> = {};
   const groupEyeBtns: Record<string, HTMLButtonElement> = {};
 
@@ -253,14 +257,16 @@ export function createAssetsLayerPanel(options: {
       row.appendChild(eyeBtn);
       row.appendChild(label);
       groupBody.appendChild(row);
-      modelRows[layer.url] = { row, eyeBtn, label };
+      const rowState: RowState = { row, eyeBtn, label, visible: vis };
+      modelRows[layer.url] = rowState;
 
       eyeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const currentVis = visibility[layer.url] !== false;
-        const nextVis = !currentVis;
-        visibility[layer.url] = nextVis;
-        saveVisibility(modelId, visibility);
+        const nextVis = !rowState.visible;
+        rowState.visible = nextVis;
+        const stored = loadVisibility(modelId);
+        stored[layer.url] = nextVis;
+        saveVisibility(modelId, stored);
         onVisibilityChange(modelId, layer, nextVis && (groupVisibility[modelId] !== false));
         eyeBtn.innerHTML = nextVis
           ? '<span class="eye-icon" aria-hidden="true">👁</span>'
@@ -346,6 +352,7 @@ export function createAssetsLayerPanel(options: {
     setVisibility: (modelId: string, layer: AssetLayerInfo, visible: boolean, persist = false) => {
       const state = rowsByModel[modelId]?.[layer.url];
       if (!state) return;
+      state.visible = visible;
       state.eyeBtn.innerHTML = visible
         ? '<span class="eye-icon">👁</span>'
         : '<span class="eye-icon eye-hidden">👁</span>';
@@ -358,9 +365,9 @@ export function createAssetsLayerPanel(options: {
     },
     getVisibility: (modelId: string, layer: AssetLayerInfo) =>
       (loadVisibility(modelId)[layer.url] !== false) && (groupVisibility[modelId] !== false),
-    getVisibilityByAssetType: (modelId: string, assetType: ActiveAssetType) => {
+    getVisibilityByKind: (modelId: string, kind: SplatLayerKind) => {
       const layers = getAssetLayers(modelId).filter(
-        (l) => l.assetType === assetType && !l.isCarShell && !l.isContactShadow
+        (l) => l.kind === kind && !l.isNameplate3d && !l.isContactShadow
       );
       return layers.some((l) => loadVisibility(modelId)[l.url] !== false) && groupVisibility[modelId] !== false;
     },
@@ -376,6 +383,7 @@ export function createAssetsLayerPanel(options: {
           const state = rowsByModel[m.id]?.[layer.url];
           if (state) {
             const vis = visibility[layer.url] !== false;
+            state.visible = vis;
             state.eyeBtn.innerHTML = vis
               ? '<span class="eye-icon" aria-hidden="true">👁</span>'
               : '<span class="eye-icon eye-hidden" aria-hidden="true">👁</span>';

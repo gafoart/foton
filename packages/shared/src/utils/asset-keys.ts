@@ -1,26 +1,42 @@
-import type { ViewMode } from "../manifest/types.js";
+import type { SplatLayerKind } from "../manifest/types.js";
 
 /**
- * Asset key format for per-color views: {modelId}:{colorId}:{view}
+ * Uniform cache/scene key for a model's splat layer:
+ * - `{modelId}:base` | `{modelId}:motor` | `{modelId}:interior`
+ * - `{modelId}:accessory:{accessoryId}`
  */
-export function assetKey(
+export function splatLayerKey(
   modelId: string,
-  colorId: string,
-  view: "exterior" | "detail"
+  kind: SplatLayerKind,
+  accessoryId?: string
 ): string {
-  return `${modelId}:${colorId}:${view}`;
+  if (kind === "accessory") {
+    if (!accessoryId) {
+      throw new Error("splatLayerKey: accessory layer requires an accessoryId");
+    }
+    return `${modelId}:accessory:${accessoryId}`;
+  }
+  return `${modelId}:${kind}`;
 }
 
-/**
- * Asset key format for interior: {modelId}:interior
- */
-export function interiorAssetKey(modelId: string): string {
-  return `${modelId}:interior`;
+export interface ParsedSplatLayerKey {
+  modelId: string;
+  kind: SplatLayerKind;
+  accessoryId?: string;
 }
 
-/**
- * Check if view is a per-color view (exterior/detail) vs interior
- */
-export function isPerColorView(view: ViewMode): view is "exterior" | "detail" {
-  return view !== "interior";
+/** Inverse of {@link splatLayerKey}. Returns null for keys it doesn't own. */
+export function parseSplatLayerKey(key: string): ParsedSplatLayerKey | null {
+  const parts = key.split(":");
+  if (parts.length === 2) {
+    const [modelId, kind] = parts;
+    if (kind === "base" || kind === "motor" || kind === "interior") {
+      return { modelId, kind };
+    }
+    return null;
+  }
+  if (parts.length === 3 && parts[1] === "accessory" && parts[2]) {
+    return { modelId: parts[0], kind: "accessory", accessoryId: parts[2] };
+  }
+  return null;
 }

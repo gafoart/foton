@@ -15,7 +15,7 @@ type Env = {
  * the version means the next request misses caches.default and re-fetches
  * from R2. Increment freely; old entries simply age out and get evicted.
  */
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 
 /**
  * 1 hour at edge + browser. Previously `immutable, max-age=31536000`, which
@@ -39,8 +39,29 @@ function parseRangeHeader(
   return { offset: start, length: Math.min(end, size - 1) - start + 1 };
 }
 
+/**
+ * Public read-only assets: allow any origin (the editor runs on its own Pages
+ * origin) and mark CORP so COEP `require-corp` documents can embed them.
+ */
+const CORS_HEADERS: Record<string, string> = {
+  "access-control-allow-origin": "*",
+  "cross-origin-resource-policy": "cross-origin",
+};
+
 export const onRequest: PagesFunction<Env> = async (ctx) => {
   const { request, env, params, waitUntil } = ctx;
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...CORS_HEADERS,
+        "access-control-allow-methods": "GET, HEAD, OPTIONS",
+        "access-control-allow-headers": "range, if-none-match",
+        "access-control-max-age": "86400",
+      },
+    });
+  }
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
@@ -91,6 +112,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     headers.set("etag", head.httpEtag);
     headers.set("cache-control", CACHE_CONTROL);
     headers.set("accept-ranges", "bytes");
+    for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
     return new Response(null, { status: 200, headers });
   }
 
@@ -122,6 +144,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   headers.set("etag", obj.httpEtag);
   headers.set("cache-control", CACHE_CONTROL);
   headers.set("accept-ranges", "bytes");
+  for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
 
   if (isRange && obj.range && totalSize > 0) {
     const start = (obj.range as { offset: number }).offset;

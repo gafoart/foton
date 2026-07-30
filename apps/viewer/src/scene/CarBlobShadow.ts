@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import { createContactShadowDiskGroup } from "@changan/scene-runtime/contactShadow";
-import { assetKey, getScale, resolveContactShadowGradient } from "@changan/shared";
+import { splatLayerKey, getScale, resolveContactShadowGradient } from "@changan/shared";
 import type { SceneManifest, TransformDef } from "@changan/shared";
 import type { AssetManager } from "./AssetManager.js";
 import type { StateStore } from "./StateStore.js";
 
 /**
- * Manifest-driven contact shadow (world transform). Hidden when exterior splat is not visible.
+ * Manifest-driven contact shadow (world transform). Hidden when the base splat is not visible.
  */
 export class CarBlobShadow {
   readonly group: THREE.Group;
@@ -49,8 +49,8 @@ export class CarBlobShadow {
       this.group.visible = false;
       return;
     }
-    const extKey = assetKey(st.modelId, st.colorId, "exterior");
-    const ext = assetManager.getCached(extKey);
+    const baseKey = splatLayerKey(st.modelId, "base");
+    const ext = assetManager.getCached(baseKey);
     if (!ext?.visible) {
       this.group.visible = false;
       return;

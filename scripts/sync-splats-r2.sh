@@ -8,7 +8,7 @@ if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [ ! -t 1 ]; then
   exit 1
 fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUCKET="${R2_BUCKET:-spark-viewer-splats}"
+BUCKET="${R2_BUCKET:-foton}"
 SPLATS="$ROOT/assets/splats"
 if [[ ! -d "$SPLATS" ]]; then
   echo "Missing $SPLATS"

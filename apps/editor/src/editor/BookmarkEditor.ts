@@ -7,7 +7,7 @@ export interface BookmarkEditorOptions {
 
 const VIEW_LABELS: Record<ViewMode, string> = {
   exterior: "Exterior",
-  detail: "Detail",
+  motor: "Motor",
   interior: "Interior",
 };
 
@@ -22,7 +22,7 @@ export function createBookmarkEditorPanel({
   title.textContent = "Camera Bookmarks";
   panel.appendChild(title);
 
-  const modes: ViewMode[] = ["exterior", "detail", "interior"];
+  const modes: ViewMode[] = ["exterior", "motor", "interior"];
 
   for (const view of modes) {
     const row = document.createElement("div");

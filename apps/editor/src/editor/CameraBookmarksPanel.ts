@@ -1,5 +1,4 @@
-import type { NamedCameraBookmark } from "@changan/shared";
-import type { ActiveAssetType } from "./EditorRuntime.js";
+import type { NamedCameraBookmark, SplatLayerKind } from "@changan/shared";
 
 export interface CameraBookmarksPanelOptions {
   getModelName: () => string;
@@ -8,12 +7,12 @@ export interface CameraBookmarksPanelOptions {
   getCurrentConstraints?: () => { azimuthMin: number; azimuthMax: number; polarMin: number; polarMax: number };
   getCurrentDoF?: () => { focalDistance: number; apertureSize: number };
   getCurrentLens?: () => { fov: number; minDistance: number; maxDistance?: number };
-  getVisibility: (asset: ActiveAssetType) => boolean;
+  getVisibility: (kind: SplatLayerKind) => boolean;
   onAdd: (
     name: string,
     pos: [number, number, number],
     target: [number, number, number],
-    visibility: Record<ActiveAssetType, boolean>,
+    visibility: Record<SplatLayerKind, boolean>,
     constraints?: { azimuthMin?: number; azimuthMax?: number; polarMin?: number; polarMax?: number },
     dof?: { focalDistance?: number; apertureSize?: number },
     lens?: { fov?: number; minDistance?: number; maxDistance?: number }
@@ -103,9 +102,10 @@ export function createCameraBookmarksPanel(options: CameraBookmarksPanelOptions)
       return;
     }
     const { pos, target } = getCurrentCamera();
-    const visibility: Record<ActiveAssetType, boolean> = {
-      exterior: getVisibility("exterior"),
-      detail: getVisibility("detail"),
+    const visibility: Record<SplatLayerKind, boolean> = {
+      base: getVisibility("base"),
+      accessory: getVisibility("accessory"),
+      motor: getVisibility("motor"),
       interior: getVisibility("interior"),
     };
     onAdd(

@@ -33,13 +33,15 @@ pnpm --filter viewer exec tsc --noEmit   # type-check just the viewer
 Cloudflare deploys (require `wrangler` authenticated; see `CLOUDFLARE.md`):
 
 ```bash
-pnpm run pages:deploy:viewer       # build + wrangler pages deploy → project changan-showroom
-pnpm run pages:create:editor       # one-time create of project spark-viewer-editor
+pnpm run pages:deploy:viewer       # build + wrangler pages deploy → project foton-showroom
+pnpm run pages:create:editor       # one-time create of project foton-editor (pages:create:viewer for the viewer)
 pnpm run pages:deploy:editor
 pnpm --filter viewer run pages:dev # build + wrangler pages dev (locally tests Functions)
 ```
 
-R2 (3DGS asset bucket; default name `spark-viewer-splats`, current production uses `changan`):
+The account has multiple Cloudflare accounts — deploys need `CLOUDFLARE_ACCOUNT_ID=6561c2988564601de317b813a35d5ffb` (Dev@gafoart.com) exported when wrangler runs non-interactively.
+
+R2 (3DGS asset bucket; default `foton`, public URL `https://pub-57dba95d5e42405eb49421305a3d16c3.r2.dev`):
 
 ```bash
 pnpm run r2:provision              # create bucket + enable r2.dev URL + apply CORS
@@ -62,7 +64,9 @@ The repo is developed on both Windows and macOS. Things to keep aligned:
 
 ## Manifest is the contract
 
-`SceneManifest` (`packages/shared/src/manifest/types.ts`) is the single source of truth for the viewer and editor. The default scene ships in `manifest.json` at the repo root; the JSON Schema is `manifest.schema.json` (regenerated from the Zod schema in `packages/shared/src/manifest/schema.json`). The viewer also serves a versioned copy from `apps/viewer/public/manifest.json`.
+`SceneManifest` (`packages/shared/src/manifest/types.ts`) is the single source of truth for the viewer and editor. The default scene ships in `manifest.json` at the repo root; the JSON Schema is `manifest.schema.json` (regenerate with `node scripts/generate-manifest-schema.mjs`, which derives it from the Zod schema and also writes `packages/shared/src/manifest/schema.json`). The viewer also serves a versioned copy from `apps/viewer/public/manifest.json`.
+
+FOTON model structure: each `ModelDef` has `base` (bare vehicle splat), `accessories[]` (attachments shown **one at a time** on top of the base — the viewer's accessory selector picks which), optional `motor` and `interior` splats, and optional `nameplate3d` (per-model GLB `splats/<id>/<id>.glb`). `colors` is a dormant concept (`{id,name}` only) — the viewer's paint/color-grade system stays in the codebase but only activates when a model declares colors. Splat file convention per model folder: `<id>.sog` base, `<id>-motor.sog`, `<id>-int.sog`, any other `<id>-<suffix>.sog` is an accessory, `<id>.glb` nameplate (see `assets/splats/README.md`). Camera bookmarks store visibility per layer kind (`base`/`accessory`/`motor`/`interior`); the `accessory` flag applies to whichever accessory is currently selected.
 
 In production the viewer's `GET /api/manifest` returns the manifest stored in `MANIFEST_KV` (key `manifest`) and falls back to the bundled `public/manifest.json` if KV is empty. The editor saves via `POST /api/manifest` (auth gated by Cloudflare Access — see `functions/lib/auth.ts`); it publishes a draft via `POST /api/manifest-draft` for the showroom dev bridge. Locally, the editor's Vite middleware exposes `/__load-manifest`, `/__save-manifest`, `/__manifest-draft`, and `/__splats-manifest`.
 
@@ -79,18 +83,18 @@ When changing manifest shape: update `types.ts`, the Zod validator in `validate.
 
 ## Cloudflare Pages projects (do not rename casually)
 
-- Viewer project: **`changan-showroom`** (URL like `https://spark-viewer-7rz.pages.dev` — Cloudflare keeps the original `*.pages.dev` subdomain when you rename a project).
-- Editor project: **`spark-viewer-editor`** (`https://spark-viewer-editor.pages.dev`).
+- Viewer project: **`foton-showroom`** (`https://foton-showroom.pages.dev`).
+- Editor project: **`foton-editor`** (`https://foton-editor.pages.dev`).
 - `config/cloudflare-pages-deploy-branch` (default: `main`) is the value `scripts/pages-wrangler-deploy.sh` passes as `--branch` and PATCHes onto the project's `production_branch`. Keep them aligned, otherwise direct uploads land in **Preview** and don't see production secrets.
-- KV namespace `spark-viewer-manifest` is bound as `MANIFEST_KV` in `apps/viewer/wrangler.toml`.
+- KV namespace `foton-manifest` (`143594c2dc71417f9b3e5299d23ae841`) is bound as `MANIFEST_KV` in `apps/viewer/wrangler.toml`.
 
 ## 3DGS assets are not in Git
 
-`assets/splats/**/*.sog` and `*.ply` are gitignored. Production reads them from R2 via `VITE_PUBLIC_ASSETS_BASE` (currently the `changan` bucket; `apps/viewer/.env.production` and `apps/editor/.env.production` are versioned with that base URL so Pages builds work without dashboard env vars). Use `pnpm run sync:splats:r2` to upload, `R2_BUCKET=<name>` to override. For local dev without R2, copy the `.sog` files into `assets/splats/` manually.
+`assets/splats/**/*.sog` and `*.ply` are gitignored. Production reads them from the `foton` R2 bucket: the viewer through its same-origin `/r2/*` Pages Function proxy (`VITE_PUBLIC_ASSETS_BASE=/r2`, edge-cached), the editor through the viewer's absolute proxy URL (`apps/*/​.env.production` are versioned so Pages builds work without dashboard env vars). Use `pnpm run sync:splats:r2` to upload, `R2_BUCKET=<name>` to override. For local dev without R2, copy the `.sog` files into `assets/splats/` manually.
 
 ## Chatbot Pages Function
 
-`functions/api/chat.ts` calls OpenAI server-side using `OPENAI_API_KEY` (secret) and `OPENAI_MODEL` (default `gpt-4o-mini`). Knowledge files live in `apps/viewer/public/knowledge/` (`changan.txt` + one per model) and are read at request time. Set the secret with `wrangler pages secret put OPENAI_API_KEY --project-name=changan-showroom`. In `pnpm dev:viewer`, `viteChatDevPlugin.ts` reads `OPENAI_API_KEY` from `apps/viewer/.env.local`, then repo-root `.env.local`, then shell env. With `pnpm pages:dev`, use `apps/viewer/.dev.vars`.
+`functions/api/chat.ts` calls OpenAI server-side using `OPENAI_API_KEY` (secret) and `OPENAI_MODEL` (default `gpt-4o-mini`). Knowledge files live in `apps/viewer/public/knowledge/` (`changan.txt` + one per model) and are read at request time. Set the secret with `wrangler pages secret put OPENAI_API_KEY --project-name=foton-showroom`. In `pnpm dev:viewer`, `viteChatDevPlugin.ts` reads `OPENAI_API_KEY` from `apps/viewer/.env.local`, then repo-root `.env.local`, then shell env. With `pnpm pages:dev`, use `apps/viewer/.dev.vars`.
 
 ## Editor → viewer auth
 

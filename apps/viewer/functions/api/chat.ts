@@ -4,7 +4,6 @@ import {
   buildSystemContent,
   openaiChatCompletion,
   MODEL_DISPLAY,
-  ALLOWED_MODEL_IDS,
   DEFAULT_OPENAI_MODEL,
   type ModelKnowledge,
 } from "../lib/chatCore.js";
@@ -88,7 +87,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   // Load the brand KB + every model's KB so the assistant can answer about any
   // car in the lineup (and compare), not just the one currently on screen.
-  const modelIds = [...ALLOWED_MODEL_IDS];
+  // The lineup list is the known-display set plus the requested model id
+  // (validated as a slug upstream); ids without a knowledge file are dropped.
+  const modelIds = [...new Set([...Object.keys(MODEL_DISPLAY), modelId])];
   let changanKb: string;
   let models: ModelKnowledge[];
   try {

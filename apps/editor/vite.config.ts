@@ -3,21 +3,6 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 
-/** Kept in sync with @changan/shared `manifest/colors.ts` (Vite config cannot import the package barrel in Node). */
-function sortColorsForShowroom<T extends { id: string }>(colors: T[]): T[] {
-  return [...colors].sort((a, b) => {
-    const aw = a.id.toLowerCase() === "white" ? 0 : 1;
-    const bw = b.id.toLowerCase() === "white" ? 0 : 1;
-    if (aw !== bw) return aw - bw;
-    return a.id.localeCompare(b.id);
-  });
-}
-
-function resolveDefaultColorId(colors: { id: string }[]): string {
-  const w = colors.find((c) => c.id.toLowerCase() === "white");
-  if (w) return w.id;
-  return colors[0]?.id ?? "";
-}
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -55,7 +40,15 @@ function sparkWasmVitePlugin(): Plugin {
 const repoSplatsDir = path.resolve(__dirname, "../../assets/splats");
 const viewerManifestPath = path.resolve(__dirname, "../viewer/public/manifest.json");
 
-/** Auto-discover models from splats folder. Convention: splats/<modelId>/{modelId}_{color}_ext.sog|.sag, {modelId}_{color}_motor.sog|.sag, {modelId}_int.sog|.sag */
+/**
+ * Auto-discover FOTON models from the splats folder. Convention (per model folder
+ * `splats/<modelId>/`, hyphen or underscore separators both accepted):
+ * - `<modelId>.sog`           → base vehicle splat (required)
+ * - `<modelId>-motor.sog`     → engine detail splat
+ * - `<modelId>-int.sog`       → interior splat
+ * - `<modelId>-<acc>.sog`     → accessory splat (furgon, tanque, …), any other suffix
+ * - `<modelId>.glb`           → 3D nameplate mesh
+ */
 function discoverManifestFromSplats(splatsDir: string): object | null {
   if (!fs.existsSync(splatsDir) || !fs.statSync(splatsDir).isDirectory()) return null;
   const entries = fs.readdirSync(splatsDir, { withFileTypes: true });
@@ -63,74 +56,66 @@ function discoverManifestFromSplats(splatsDir: string): object | null {
   if (modelDirs.length === 0) return null;
 
   const defaultTransform = { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: 1 };
-  const defaultBookmarks = {
-    exterior: { pos: [0, 0.5, 1.5], target: [0, 0, -0.8] },
-    detail: { pos: [0, 0.3, -1.5], target: [0, 0, -0.8] },
-    interior: { pos: [0, 0.25, -0.5], target: [0, 0, -0.8] },
-  };
   const makeAsset = (url: string) => ({ url, fileType: "zip", transform: defaultTransform });
-  const humanize = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const humanize = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const isSplatAsset = (f: string) => f.endsWith(".sog") || f.endsWith(".sag") || f.endsWith(".ozg");
 
   const models: object[] = [];
   for (const modelId of modelDirs) {
     const modelPath = path.join(splatsDir, modelId);
-    const files = fs.readdirSync(modelPath).filter(isSplatAsset);
+    const allFiles = fs.readdirSync(modelPath);
+    const files = allFiles.filter(isSplatAsset);
+
+    let baseFile: string | null = null;
+    let motorFile: string | null = null;
     let interiorFile: string | null = null;
-    const exteriorByColor = new Map<string, string>();
-    const detailByColor = new Map<string, string>();
+    const accessoryFiles = new Map<string, string>(); // accessoryId -> file
 
     for (const file of files) {
-      const base = file.replace(/\.(sog|sag|ozg)$/i, "");
-      if (base === `${modelId}_int`) interiorFile = file;
-      else {
-        const extM = base.match(new RegExp(`^${esc(modelId)}_(.+)_ext$`));
-        const motorM = base.match(new RegExp(`^${esc(modelId)}_(.+)_motor$`));
-        if (extM) exteriorByColor.set(extM[1].toLowerCase(), file);
-        if (motorM) detailByColor.set(motorM[1].toLowerCase(), file);
+      const stem = file.replace(/\.(sog|sag|ozg)$/i, "");
+      if (stem === modelId) {
+        baseFile = file;
+        continue;
       }
+      if (!stem.startsWith(modelId)) continue;
+      const suffix = stem.slice(modelId.length).replace(/^[-_]/, "");
+      if (!suffix) continue;
+      const s = suffix.toLowerCase();
+      if (s === "motor") motorFile = file;
+      else if (s === "int" || s === "interior") interiorFile = file;
+      else accessoryFiles.set(s, file);
     }
-    // Interior optional: allow models with only exterior+detail
-    const interiorAsset = interiorFile ? makeAsset(`/splats/${modelId}/${interiorFile}`) : null;
 
-    const colors: object[] = [];
-    const colorIds = new Set([...exteriorByColor.keys(), ...detailByColor.keys()]);
-    const fallbackMotor = detailByColor.values().next().value;
-    for (const colorId of colorIds) {
-      const extFile = exteriorByColor.get(colorId);
-      const motorFile = detailByColor.get(colorId) ?? fallbackMotor ?? extFile; // use exterior as fallback for detail
-      if (!extFile) continue;
-      colors.push({
-        id: colorId,
-        name: humanize(colorId),
-        assets: {
-          exterior: makeAsset(`/splats/${modelId}/${extFile}`),
-          detail: makeAsset(`/splats/${modelId}/${motorFile}`),
-        },
-      });
-    }
-    if (colors.length === 0) continue;
+    if (!baseFile) continue; // a model needs at least its base splat
 
-    const colorsSorted = sortColorsForShowroom(colors as { id: string }[]);
+    const accessories = [...accessoryFiles.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, file]) => ({
+        id,
+        name: humanize(id),
+        asset: makeAsset(`/splats/${modelId}/${file}`),
+      }));
+
+    const hasNameplate = allFiles.includes(`${modelId}.glb`);
 
     models.push({
       id: modelId,
       name: humanize(modelId),
-      colors: colorsSorted,
-      interior: interiorAsset ?? makeAsset(`/splats/${modelId}/${exteriorByColor.values().next().value}`), // placeholder if no interior
-      bookmarks: defaultBookmarks,
+      base: makeAsset(`/splats/${modelId}/${baseFile}`),
+      accessories,
+      ...(motorFile ? { motor: makeAsset(`/splats/${modelId}/${motorFile}`) } : {}),
+      ...(interiorFile ? { interior: makeAsset(`/splats/${modelId}/${interiorFile}`) } : {}),
+      ...(hasNameplate ? { nameplate3d: { transform: defaultTransform } } : {}),
       cameraBookmarks: [],
       annotations: [],
     });
   }
   if (models.length === 0) return null;
-  const first = models[0] as { id: string; colors: { id: string }[] };
+  const first = models[0] as { id: string };
   return {
-    version: 1,
+    version: 2,
     defaults: {
       modelId: first.id,
-      colorId: resolveDefaultColorId(first.colors),
       view: "exterior",
     },
     models,
@@ -358,7 +343,7 @@ export default defineConfig({
           const manifest = discoverManifestFromSplats(repoSplatsDir);
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-          res.end(JSON.stringify(manifest ?? { version: 1, defaults: { modelId: "", colorId: "", view: "exterior" }, models: [] }));
+          res.end(JSON.stringify(manifest ?? { version: 2, defaults: { modelId: "", view: "exterior" }, models: [] }));
         });
       },
     },

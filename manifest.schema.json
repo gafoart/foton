@@ -1,1 +1,778 @@
-{"$schema":"http://json-schema.org/draft-07/schema#","title":"SceneManifest","type":"object","required":["version","defaults","models"],"properties":{"version":{"type":"number"},"cdnBaseUrl":{"type":"string"},"defaults":{"type":"object","required":["modelId","colorId","view"],"properties":{"modelId":{"type":"string","minLength":1},"colorId":{"type":"string","minLength":1},"view":{"enum":["exterior","detail","interior"]}}},"models":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/ModelDef"}}},"$defs":{"TransformDef":{"type":"object","required":["pos","rot","scale"],"properties":{"pos":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"rot":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4},"scale":{"type":"number"}}},"AssetDef":{"type":"object","required":["url","transform"],"properties":{"url":{"type":"string","minLength":1},"lod":{"type":"object","properties":{"mobile":{"type":"string"},"desktop":{"type":"string"}}},"transform":{"$ref":"#/$defs/TransformDef"},"meta":{"type":"object","properties":{"splatCount":{"type":"number"},"sizeBytes":{"type":"number"}}}}},"ColorDef":{"type":"object","required":["id","name","assets"],"properties":{"id":{"type":"string","minLength":1},"name":{"type":"string"},"assets":{"type":"object","required":["exterior","detail"],"properties":{"exterior":{"$ref":"#/$defs/AssetDef"},"detail":{"$ref":"#/$defs/AssetDef"}}}}},"CameraBookmark":{"type":"object","required":["pos","target"],"properties":{"pos":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"target":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3}}},"AnnotationDef":{"type":"object","required":["id","view","pos","text"],"properties":{"id":{"type":"string","minLength":1},"view":{"enum":["exterior","detail","interior"]},"pos":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"text":{"type":"string"},"bookmarkId":{"type":"string"}}},"ModelDef":{"type":"object","required":["id","name","colors","interior","bookmarks","annotations"],"properties":{"id":{"type":"string","minLength":1},"name":{"type":"string"},"colors":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/ColorDef"}},"interior":{"$ref":"#/$defs/AssetDef"},"bookmarks":{"type":"object","required":["exterior","detail","interior"],"properties":{"exterior":{"$ref":"#/$defs/CameraBookmark"},"detail":{"$ref":"#/$defs/CameraBookmark"},"interior":{"$ref":"#/$defs/CameraBookmark"}}},"annotations":{"type":"array","items":{"$ref":"#/$defs/AnnotationDef"}}}}}}
+{
+  "$ref": "#/definitions/SceneManifest",
+  "definitions": {
+    "SceneManifest": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number"
+        },
+        "cdnBaseUrl": {
+          "type": "string"
+        },
+        "defaults": {
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "accessoryId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "colorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "view": {
+              "type": "string",
+              "enum": [
+                "exterior",
+                "motor",
+                "interior"
+              ]
+            }
+          },
+          "required": [
+            "modelId",
+            "view"
+          ],
+          "additionalProperties": false
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "base": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fileType": {
+                    "type": "string",
+                    "enum": [
+                      "ply",
+                      "spz",
+                      "splat",
+                      "ksplat",
+                      "sogs",
+                      "zip"
+                    ]
+                  },
+                  "lod": {
+                    "type": "object",
+                    "properties": {
+                      "mobile": {
+                        "type": "string"
+                      },
+                      "desktop": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "transform": {
+                    "type": "object",
+                    "properties": {
+                      "pos": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "rot": {
+                        "type": "array",
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "scale": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "array",
+                            "minItems": 3,
+                            "maxItems": 3,
+                            "items": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "pivot": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "pivotRot": {
+                        "type": "array",
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "pos",
+                      "rot",
+                      "scale"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "meta": {
+                    "type": "object",
+                    "properties": {
+                      "splatCount": {
+                        "type": "number"
+                      },
+                      "sizeBytes": {
+                        "type": "number"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "url",
+                  "transform"
+                ],
+                "additionalProperties": false
+              },
+              "accessories": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "asset": {
+                      "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "asset"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "motor": {
+                "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base"
+              },
+              "interior": {
+                "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base"
+              },
+              "colors": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "nameplate3d": {
+                "type": "object",
+                "properties": {
+                  "transform": {
+                    "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+                  },
+                  "tint": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "transform"
+                ],
+                "additionalProperties": false
+              },
+              "contactShadow": {
+                "type": "object",
+                "properties": {
+                  "transform": {
+                    "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "cornerRadius": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "gradient": {
+                    "type": "object",
+                    "properties": {
+                      "centerAlpha": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "midStop": {
+                        "type": "number",
+                        "minimum": 0.02,
+                        "maximum": 0.999
+                      },
+                      "midAlpha": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "edgeAlpha": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "transform"
+                ],
+                "additionalProperties": false
+              },
+              "bookmarks": {
+                "type": "object",
+                "properties": {
+                  "exterior": {
+                    "type": "object",
+                    "properties": {
+                      "pos": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "target": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "pos",
+                      "target"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "motor": {
+                    "$ref": "#/definitions/SceneManifest/properties/models/items/properties/bookmarks/properties/exterior"
+                  },
+                  "interior": {
+                    "$ref": "#/definitions/SceneManifest/properties/models/items/properties/bookmarks/properties/exterior"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "cameraBookmarks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "pos": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "target": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "visibility": {
+                      "type": "object",
+                      "properties": {
+                        "base": {
+                          "type": "boolean"
+                        },
+                        "accessory": {
+                          "type": "boolean"
+                        },
+                        "motor": {
+                          "type": "boolean"
+                        },
+                        "interior": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "base",
+                        "accessory",
+                        "motor",
+                        "interior"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "azimuthMin": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "azimuthMax": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "polarMin": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "polarMax": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "fov": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "minDistance": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "maxDistance": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "cameraMode": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "orbit",
+                            "freelook"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "focalDistance": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "apertureSize": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "pos",
+                    "target",
+                    "visibility"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "annotations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "view": {
+                      "$ref": "#/definitions/SceneManifest/properties/defaults/properties/view"
+                    },
+                    "pos": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "bookmarkId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "view",
+                    "pos",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "base",
+              "accessories",
+              "annotations"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "dealership": {
+          "type": "object",
+          "properties": {
+            "transform": {
+              "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+            }
+          },
+          "required": [
+            "transform"
+          ],
+          "additionalProperties": false
+        },
+        "floor": {
+          "type": "object",
+          "properties": {
+            "transform": {
+              "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+            },
+            "brightness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 4
+            }
+          },
+          "required": [
+            "transform"
+          ],
+          "additionalProperties": false
+        },
+        "ceiling": {
+          "type": "object",
+          "properties": {
+            "transform": {
+              "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+            },
+            "brightness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 4
+            }
+          },
+          "required": [
+            "transform"
+          ],
+          "additionalProperties": false
+        },
+        "blackdrop": {
+          "type": "object",
+          "properties": {
+            "transform": {
+              "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+            },
+            "tint": {
+              "type": "string"
+            },
+            "tintStrength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "transform"
+          ],
+          "additionalProperties": false
+        },
+        "changan3D": {
+          "type": "object",
+          "properties": {
+            "transform": {
+              "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+            },
+            "tint": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "transform"
+          ],
+          "additionalProperties": false
+        },
+        "panoBackground": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "transform": {
+              "$ref": "#/definitions/SceneManifest/properties/models/items/properties/base/properties/transform"
+            },
+            "brightness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 4
+            }
+          },
+          "required": [
+            "url",
+            "transform"
+          ],
+          "additionalProperties": false
+        },
+        "scene": {
+          "type": "object",
+          "properties": {
+            "backgroundColor": {
+              "type": "string"
+            },
+            "lighting": {
+              "type": "object",
+              "properties": {
+                "ambient": {
+                  "type": "object",
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "intensity": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "color",
+                    "intensity"
+                  ],
+                  "additionalProperties": false
+                },
+                "directional": {
+                  "type": "object",
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "intensity": {
+                      "type": "number"
+                    },
+                    "pos": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "color",
+                    "intensity",
+                    "pos"
+                  ],
+                  "additionalProperties": false
+                },
+                "fog": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "near": {
+                      "type": "number"
+                    },
+                    "far": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "color",
+                    "near",
+                    "far"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "defaults",
+        "models"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

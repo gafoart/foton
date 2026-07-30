@@ -19,29 +19,25 @@ La app en producción usa `VITE_PUBLIC_ASSETS_BASE` (URL `*.r2.dev` o custom dom
 
 `pnpm dev:viewer` y `pnpm dev:editor` sirven **`assets/splats/`** con Vite solo si **tienes los `.sog` en disco** (cópialos desde R2, otro equipo, o sincroniza con un script propio). Si la carpeta está vacía, el showroom en local no cargará modelos hasta que añadas binarios.
 
-## Estructura de carpetas (convención de nombres)
+## Estructura de carpetas (convención de nombres FOTON)
 
-Cada modelo tiene su subcarpeta. El **editor en local** puede auto-descubrir modelos desde el disco con esta convención:
+Cada modelo tiene su subcarpeta. El **editor en local** auto-descubre modelos desde el disco con esta convención (separador `-` o `_`):
 
 ```
 splats/
-  <modelId>/                         # e.g. alsvin, cs55
-    <modelId>_<color>_ext.sog       # Exterior
-    <modelId>_<color>_motor.sog    # Motor/detail view
-    <modelId>_int.sog              # Interior (one per car)
+  <modelId>/                # e.g. 3t
+    <modelId>.sog           # Modelo base (requerido)
+    <modelId>-motor.sog     # Motor (opcional)
+    <modelId>-int.sog       # Interior (opcional)
+    <modelId>-<accesorio>.sog  # Accesorio — cualquier otro sufijo (furgon, tanque, …); uno visible a la vez sobre la base
+    <modelId>.glb           # Nombre 3D (opcional)
 ```
 
-### Nombres requeridos para auto-discovery
+Los sufijos `motor` e `int` están reservados; todo otro sufijo se registra como accesorio con ese id.
 
-- `{modelId}_int.sog` – interior  
-- `{modelId}_{color}_ext.sog` – exterior  
-- `{modelId}_{color}_motor.sog` – detail  
+### Ejemplo (3t)
 
-Cada color necesita **exterior y motor** para descubrirse.
-
-### Ejemplo (Alsvin)
-
-- `alsvin_white_ext.sog`, `alsvin_white_motor.sog`, `alsvin_int.sog`
+- `3t.sog` (base), `3t-furgon.sog` y `3t-tanque.sog` (accesorios), `3t-int.sog` (interior), `3t.glb` (nombre 3D)
 
 ## Formato de archivo
 

@@ -1,4 +1,4 @@
-export type ViewMode = "exterior" | "detail" | "interior";
+export type ViewMode = "exterior" | "motor" | "interior";
 
 export interface TransformDef {
   pos: [number, number, number];
@@ -26,21 +26,40 @@ export interface AssetDef {
   meta?: { splatCount?: number; sizeBytes?: number };
 }
 
+/**
+ * Splat layer kinds for a FOTON model:
+ * - `base` — the bare vehicle (`splats/<id>/<id>.sog`), always the default view.
+ * - `accessory` — one attachment shown at a time on top of the base
+ *   (`splats/<id>/<id>-<accessoryId>.sog`).
+ * - `motor` — engine detail splat (`splats/<id>/<id>-motor.sog`).
+ * - `interior` — cabin splat (`splats/<id>/<id>-int.sog`).
+ */
+export type SplatLayerKind = "base" | "accessory" | "motor" | "interior";
+
+/**
+ * An attachment splat aligned on top of the base model (furgón, tanque, …).
+ * The viewer shows at most one accessory at a time.
+ */
+export interface AccessoryDef {
+  id: string;
+  name: string;
+  asset: AssetDef;
+}
+
+/**
+ * Dormant color-variant concept (paint mask / color-grade shader system).
+ * FOTON models currently ship without color variants; the paint pipeline in
+ * the viewer stays in the codebase and reactivates if a model declares colors.
+ */
 export interface ColorDef {
   id: string;
   name: string;
-  assets: {
-    exterior: AssetDef;
-    detail: AssetDef; // single model for motor + trunk views
-  };
 }
 
 export interface CameraBookmark {
   pos: [number, number, number];
   target: [number, number, number];
 }
-
-export type ActiveAssetType = "exterior" | "detail" | "interior";
 
 /** How the user controls the camera for this bookmark. */
 export type CameraInteractionMode = "orbit" | "freelook";
@@ -51,8 +70,12 @@ export interface NamedCameraBookmark {
   name: string;
   pos: [number, number, number];
   target: [number, number, number];
-  /** Layer visibility when this bookmark was created */
-  visibility: Record<ActiveAssetType, boolean>;
+  /**
+   * Layer visibility when this bookmark was created. The `accessory` flag
+   * applies to whichever accessory is currently selected in the viewer —
+   * bookmarks frame views, the accessory selector decides which attachment.
+   */
+  visibility: Record<SplatLayerKind, boolean>;
   /** Orbit constraints (degrees). X = azimuth, Y = polar. */
   azimuthMin?: number;
   azimuthMax?: number;
@@ -86,13 +109,21 @@ export interface AnnotationDef {
 export interface ModelDef {
   id: string;
   name: string;
-  colors: ColorDef[];
-  interior: AssetDef;
+  /** Bare vehicle splat — always loaded, the default view. */
+  base: AssetDef;
+  /** Attachments shown one at a time on top of the base. May be empty. */
+  accessories: AccessoryDef[];
+  /** Engine detail splat (`<id>-motor.sog`). Optional until captured. */
+  motor?: AssetDef;
+  /** Cabin splat (`<id>-int.sog`). Optional until captured. */
+  interior?: AssetDef;
+  /** Dormant color variants — see {@link ColorDef}. */
+  colors?: ColorDef[];
   /**
-   * Optional extruded mesh `splats/<id>/<id>.glb` (editor alignment + viewer).
-   * Omitted until the shell is moved in the editor or set in the manifest.
+   * 3D nameplate mesh `splats/<id>/<id>.glb` (aligned in the editor, rendered
+   * by the viewer). `tint` (hex) overrides the mesh base color.
    */
-  carShell?: { transform: TransformDef };
+  nameplate3d?: { transform: TransformDef; tint?: string };
   /**
    * Floor contact-shadow (rounded rect, world transform). Per model; edited in the editor
    * (layer + gizmo + opacity + corner radius). Viewer reads it for the active model.
@@ -116,7 +147,8 @@ export interface ModelDef {
       edgeAlpha?: number;
     };
   };
-  bookmarks: Record<ViewMode, CameraBookmark>;
+  /** Legacy per-view default cameras. `cameraBookmarks` is the real navigation. */
+  bookmarks?: Partial<Record<ViewMode, CameraBookmark>>;
   /** Named camera bookmarks with visibility. Editor uses these. */
   cameraBookmarks?: NamedCameraBookmark[];
   annotations: AnnotationDef[];
@@ -151,7 +183,10 @@ export interface SceneManifest {
   cdnBaseUrl?: string;
   defaults: {
     modelId: string;
-    colorId: string;
+    /** Accessory selected at boot. Omit for base-only (the default state). */
+    accessoryId?: string;
+    /** Dormant — only meaningful when the model declares colors. */
+    colorId?: string;
     view: ViewMode;
   };
   models: ModelDef[];
@@ -182,9 +217,9 @@ export interface SceneManifest {
     tintStrength?: number;
   };
   /**
-   * Optional `splats/changan3D.glb` — same visibility rule as backdrop: in the viewer only
-   * when `?backdrop=1`; in the editor, shown/hidden with the blackdrop toggle.
-   * `tint` (hex) sets an absolute color for the 3D nameplate meshes; when absent
+   * Optional scene-wide brand nameplate GLB — same visibility rule as backdrop: in the
+   * viewer only when `?backdrop=1`; in the editor, shown/hidden with the blackdrop toggle.
+   * `tint` (hex) sets an absolute color for the nameplate meshes; when absent
    * they render at their base albedo brightened 15% (the lighter-gray default).
    */
   changan3D?: { transform: TransformDef; tint?: string };

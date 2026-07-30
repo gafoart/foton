@@ -2,7 +2,8 @@ import type { ViewMode } from "@changan/shared";
 
 export interface ViewerState {
   modelId: string;
-  colorId: string;
+  /** Active accessory (attachment) id, or null for the bare base vehicle. */
+  accessoryId: string | null;
   viewMode: ViewMode;
 }
 
@@ -26,9 +27,10 @@ export class StateStore {
     this.emit();
   }
 
-  setColor(colorId: string): void {
-    if (this.state.colorId === colorId) return;
-    this.state.colorId = colorId;
+  /** Select an accessory (attachment) or `null` for base-only. */
+  setAccessory(accessoryId: string | null): void {
+    if (this.state.accessoryId === accessoryId) return;
+    this.state.accessoryId = accessoryId;
     this.emit();
   }
 
@@ -44,8 +46,11 @@ export class StateStore {
       this.state.modelId = partial.modelId;
       changed = true;
     }
-    if (partial.colorId !== undefined && this.state.colorId !== partial.colorId) {
-      this.state.colorId = partial.colorId;
+    if (
+      partial.accessoryId !== undefined &&
+      this.state.accessoryId !== partial.accessoryId
+    ) {
+      this.state.accessoryId = partial.accessoryId;
       changed = true;
     }
     if (

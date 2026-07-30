@@ -22,8 +22,6 @@ import {
   getPivot,
   getPivotRot,
   getScale,
-  sortColorsForShowroom,
-  resolveDefaultColorIdForModel,
   ensureContactShadowDefaults,
   DEFAULT_CONTACT_SHADOW_TRANSFORM,
   resolveContactShadowGradient,
@@ -32,19 +30,21 @@ import {
 import { createContactShadowDiskGroup } from "@changan/scene-runtime/contactShadow";
 import type {
   SceneManifest,
+  ModelDef,
+  AccessoryDef,
   AssetDef,
   TransformDef,
   NamedCameraBookmark,
   CameraInteractionMode,
+  SplatLayerKind,
 } from "@changan/shared";
 import { EditorRuntime } from "./editor/EditorRuntime.js";
-import type { ActiveAssetType } from "./editor/EditorRuntime.js";
+import type { ActiveLayerRef } from "./editor/EditorRuntime.js";
 import { TransformGizmosController } from "./editor/TransformGizmos.js";
 import type { GizmoMode } from "./editor/TransformGizmos.js";
 import { createTransformParamsPanel } from "./editor/TransformParamsPanel.js";
 import { createCameraBookmarksPanel } from "./editor/CameraBookmarksPanel.js";
 import { createBookmarkNavigator } from "./editor/BookmarkNavigator.js";
-import { createColorBar } from "./editor/ColorBar.js";
 import { createAssetsLayerPanel, type AssetLayerInfo } from "./editor/AssetsLayerPanel.js";
 import { createColorRangePanel } from "./editor/ColorRangePanel.js";
 import { CameraTravelAnimation } from "./editor/CameraTravel.js";
@@ -75,11 +75,6 @@ const MANIFEST_SAVE_URL = remoteManifestApi
   ? `${viewerApiOrigin}/api/manifest`
   : "/__save-manifest";
 const LOCAL_SAVE_URL = "/__save-manifest";
-const ASSET_LABELS: Record<ActiveAssetType, string> = {
-  exterior: "Exterior",
-  detail: "Detail",
-  interior: "Interior",
-};
 
 async function init(): Promise<void> {
   const app = document.getElementById("app")!;
@@ -233,7 +228,7 @@ async function init(): Promise<void> {
   let manifest: SceneManifest;
   const storedDraft = ManifestDraft.loadFromStorage();
   const emptyManifest = (): SceneManifest =>
-    ({ version: 1, defaults: { modelId: "", colorId: "", view: "exterior" }, models: [] });
+    ({ version: 2, defaults: { modelId: "", view: "exterior" }, models: [] });
 
   let manifestSource = "empty";
   try {
@@ -363,93 +358,110 @@ async function init(): Promise<void> {
 
   let transformGroupRef: THREE.Group | null = null;
   let meshRef: { mesh: import("@sparkjsdev/spark").SplatMesh } | null = null;
-  let editingCarShell = false;
+  let editingNameplate3d = false;
   let editingContactShadow = false;
 
-  /** Synthetic layer URL for the optional `{modelId}.glb` shell in the left panel. */
-  const CAR_SHELL_LAYER_URL = "__car_shell__";
+  /** Synthetic layer URL for the optional `{modelId}.glb` 3D nameplate in the left panel. */
+  const NAMEPLATE3D_LAYER_URL = "__nameplate3d__";
   /** Synthetic row for manifest `contactShadow` (floor disk). */
   const CONTACT_SHADOW_LAYER_URL = "__contact_shadow__";
 
   // Asset refs keyed by URL (all loaded when model is selected)
   const assetRefs: Record<string, { group: THREE.Group; mesh: import("@sparkjsdev/spark").SplatMesh }> = {};
 
+  /** ActiveLayerRef for a non-synthetic panel row. */
+  function layerToRef(layer: AssetLayerInfo): ActiveLayerRef {
+    return {
+      kind: layer.kind,
+      ...(layer.accessoryId !== undefined ? { accessoryId: layer.accessoryId } : {}),
+    };
+  }
+
+  /** AssetDef backing a non-synthetic layer row, or undefined when the model lacks it. */
+  function resolveLayerDef(model: ModelDef, layer: AssetLayerInfo): AssetDef | undefined {
+    if (layer.isNameplate3d || layer.isContactShadow) return undefined;
+    switch (layer.kind) {
+      case "base":
+        return model.base;
+      case "motor":
+        return model.motor;
+      case "interior":
+        return model.interior;
+      case "accessory":
+        return model.accessories.find((a) => a.id === layer.accessoryId)?.asset;
+    }
+  }
+
   function getAssetLayers(modelId: string): AssetLayerInfo[] {
     const model = manifestDraft.manifest.models.find((m) => m.id === modelId);
     if (!model) return [];
     const seen = new Set<string>();
     const out: AssetLayerInfo[] = [];
-    for (const color of model.colors) {
-      for (const [assetType, def] of [
-        ["exterior", color.assets.exterior] as const,
-        ["detail", color.assets.detail] as const,
-      ]) {
-        if (seen.has(def.url)) continue;
-        seen.add(def.url);
-        out.push({
-          url: def.url,
-          label: def.url.split("/").pop() ?? def.url,
-          colorId: color.id,
-          assetType,
-        });
-      }
-    }
-    if (model.interior && !seen.has(model.interior.url)) {
-      seen.add(model.interior.url);
+    const push = (
+      def: AssetDef | undefined,
+      kind: SplatLayerKind,
+      label: string,
+      accessoryId?: string
+    ): void => {
+      if (!def || seen.has(def.url)) return;
+      seen.add(def.url);
       out.push({
-        url: model.interior.url,
-        label: model.interior.url.split("/").pop() ?? model.interior.url,
-        assetType: "interior",
+        url: def.url,
+        label,
+        kind,
+        ...(accessoryId !== undefined ? { accessoryId } : {}),
       });
+    };
+    push(model.base, "base", "Base");
+    for (const acc of model.accessories) {
+      push(acc.asset, "accessory", acc.name, acc.id);
     }
+    push(model.motor, "motor", "Motor");
+    push(model.interior, "interior", "Interior");
     out.push({
-      url: CAR_SHELL_LAYER_URL,
-      label: "3D shell (.glb)",
-      assetType: "exterior",
-      isCarShell: true,
+      url: NAMEPLATE3D_LAYER_URL,
+      label: "Nombre 3D",
+      kind: "base",
+      isNameplate3d: true,
     });
     out.push({
       url: CONTACT_SHADOW_LAYER_URL,
       label: "Contact shadow",
-      assetType: "exterior",
+      kind: "base",
       isContactShadow: true,
     });
     return out;
   }
 
-  /** Layer visibility for a bookmark, scoped to the active paint color (exterior/detail). */
+  /**
+   * Layer visibility for a bookmark. Accessories combine the bookmark's single
+   * `accessory` flag with the layer's own panel eye toggle — the user's per-
+   * accessory toggles decide WHICH accessory shows.
+   */
   function bookmarkLayerTargetVisible(
+    modelId: string,
     layer: AssetLayerInfo,
-    bm: NamedCameraBookmark,
-    activeColorId: string
+    bm: NamedCameraBookmark
   ): boolean {
-    if (layer.isContactShadow) {
-      return bm.visibility.exterior;
+    if (layer.isContactShadow || layer.isNameplate3d) {
+      return bm.visibility.base;
     }
-    if (layer.isCarShell) {
-      return bm.visibility.exterior;
+    switch (layer.kind) {
+      case "base":
+        return bm.visibility.base;
+      case "motor":
+        return bm.visibility.motor;
+      case "interior":
+        return bm.visibility.interior;
+      case "accessory":
+        return bm.visibility.accessory && assetsLayerPanel.getVisibility(modelId, layer);
     }
-    if (layer.assetType === "interior") {
-      return bm.visibility.interior;
-    }
-    // Exterior is now a single shared body (one `{model}_white_ext.sog` for all
-    // colors; color comes from the paint grade), so it's color-independent —
-    // always visible regardless of the active color. Only detail (motor/trunk)
-    // is still per-color.
-    if (layer.assetType === "exterior") {
-      return bm.visibility.exterior;
-    }
-    const cid = layer.colorId;
-    if (cid === undefined) {
-      return bm.visibility[layer.assetType];
-    }
-    return bm.visibility.detail && cid === activeColorId;
   }
 
-  const carShellGroup = new THREE.Group();
-  carShellGroup.userData.isCarShell = true;
-  carShellGroup.userData.modelId = "";
-  let carShellLoadedModelId = "";
+  const nameplateGroup = new THREE.Group();
+  nameplateGroup.userData.isNameplate3d = true;
+  nameplateGroup.userData.modelId = "";
+  let nameplateLoadedModelId = "";
 
   const contactShadowDisk = createContactShadowDiskGroup(0.9);
   const contactShadowGroup = contactShadowDisk.group;
@@ -457,19 +469,19 @@ async function init(): Promise<void> {
   contactShadowGroup.userData.isContactShadow = true;
   runtime.getSplatContainer().add(contactShadowGroup);
 
-  const DEFAULT_CAR_SHELL_TRANSFORM: TransformDef = { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: 1 };
-  function getCarShellTransformForModel(mid: string): TransformDef {
+  const DEFAULT_NAMEPLATE3D_TRANSFORM: TransformDef = { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: 1 };
+  function getNameplate3dTransformForModel(mid: string): TransformDef {
     const m = manifestDraft.manifest.models.find((x) => x.id === mid);
-    return m?.carShell?.transform ?? DEFAULT_CAR_SHELL_TRANSFORM;
+    return m?.nameplate3d?.transform ?? DEFAULT_NAMEPLATE3D_TRANSFORM;
   }
-  function getCarShellTransform(): TransformDef {
-    return getCarShellTransformForModel(editorRuntime.state.modelId);
+  function getNameplate3dTransform(): TransformDef {
+    return getNameplate3dTransformForModel(editorRuntime.state.modelId);
   }
-  function applyCarShellTransform(t: TransformDef): void {
-    carShellGroup.position.set(t.pos[0], t.pos[1], t.pos[2]);
-    carShellGroup.quaternion.set(t.rot[0], t.rot[1], t.rot[2], t.rot[3]);
+  function applyNameplate3dTransform(t: TransformDef): void {
+    nameplateGroup.position.set(t.pos[0], t.pos[1], t.pos[2]);
+    nameplateGroup.quaternion.set(t.rot[0], t.rot[1], t.rot[2], t.rot[3]);
     const [sx, sy, sz] = getScale(t);
-    carShellGroup.scale.set(sx, sy, sz);
+    nameplateGroup.scale.set(sx, sy, sz);
   }
 
   function getContactShadowTransform(): TransformDef {
@@ -477,7 +489,7 @@ async function init(): Promise<void> {
     return m?.contactShadow?.transform ?? { ...DEFAULT_CONTACT_SHADOW_TRANSFORM };
   }
 
-  function disposeCarShellSubtree(root: THREE.Object3D): void {
+  function disposeGlbSubtree(root: THREE.Object3D): void {
     root.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
         obj.geometry?.dispose();
@@ -487,40 +499,40 @@ async function init(): Promise<void> {
     });
   }
 
-  async function loadCarShellForModel(modelId: string): Promise<void> {
+  async function loadNameplate3dForModel(modelId: string): Promise<void> {
     if (!modelId) return;
-    if (carShellLoadedModelId === modelId && carShellGroup.children.length > 0) return;
+    if (nameplateLoadedModelId === modelId && nameplateGroup.children.length > 0) return;
     const url = resolveSplatAssetUrl(`/splats/${modelId}/${modelId}.glb`);
     try {
       const loader = new GLTFLoader();
       const gltf = await loader.loadAsync(url);
-      while (carShellGroup.children.length > 0) {
-        const c = carShellGroup.children[0]!;
-        carShellGroup.remove(c);
-        disposeCarShellSubtree(c);
+      while (nameplateGroup.children.length > 0) {
+        const c = nameplateGroup.children[0]!;
+        nameplateGroup.remove(c);
+        disposeGlbSubtree(c);
       }
-      carShellGroup.add(gltf.scene);
-      carShellGroup.userData.modelId = modelId;
-      carShellLoadedModelId = modelId;
-      carShellGroup.visible = true;
-      carShellGroup.traverse((o) => {
+      nameplateGroup.add(gltf.scene);
+      nameplateGroup.userData.modelId = modelId;
+      nameplateLoadedModelId = modelId;
+      nameplateGroup.visible = true;
+      nameplateGroup.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.renderOrder = -50;
         }
       });
-      applyCarShellTransform(getCarShellTransformForModel(modelId));
-      if (!carShellGroup.parent) {
-        runtime.getSplatContainer().add(carShellGroup);
+      applyNameplate3dTransform(getNameplate3dTransformForModel(modelId));
+      if (!nameplateGroup.parent) {
+        runtime.getSplatContainer().add(nameplateGroup);
       }
     } catch {
-      while (carShellGroup.children.length > 0) {
-        const c = carShellGroup.children[0]!;
-        carShellGroup.remove(c);
-        disposeCarShellSubtree(c);
+      while (nameplateGroup.children.length > 0) {
+        const c = nameplateGroup.children[0]!;
+        nameplateGroup.remove(c);
+        disposeGlbSubtree(c);
       }
-      carShellGroup.userData.modelId = "";
-      carShellLoadedModelId = "";
-      carShellGroup.visible = false;
+      nameplateGroup.userData.modelId = "";
+      nameplateLoadedModelId = "";
+      nameplateGroup.visible = false;
     }
   }
 
@@ -530,34 +542,23 @@ async function init(): Promise<void> {
     initialModelId: manifest.defaults.modelId,
     getAssetLayers,
     getActiveLayer: () => {
-      const { modelId, colorId, activeAsset } = editorRuntime.state;
+      const { modelId, activeLayer } = editorRuntime.state;
       const layers = getAssetLayers(modelId);
       if (editingContactShadow) {
         return layers.find((l) => l.isContactShadow) ?? null;
       }
-      if (editingCarShell) {
-        return layers.find((l) => l.isCarShell) ?? null;
-      }
-      if (activeAsset === "interior") {
-        return layers.find((l) => l.assetType === "interior" && !l.isCarShell && !l.isContactShadow) ?? null;
-      }
-      if (activeAsset === "exterior") {
-        // Single shared exterior body — not color-scoped.
-        return (
-          layers.find(
-            (l) => l.assetType === "exterior" && !l.isCarShell && !l.isContactShadow
-          ) ?? null
-        );
+      if (editingNameplate3d) {
+        return layers.find((l) => l.isNameplate3d) ?? null;
       }
       return (
         layers.find(
           (l) =>
-            l.colorId === colorId &&
-            l.assetType === activeAsset &&
-            !l.isCarShell &&
-            !l.isContactShadow
+            !l.isNameplate3d &&
+            !l.isContactShadow &&
+            l.kind === activeLayer.kind &&
+            (l.kind !== "accessory" || l.accessoryId === activeLayer.accessoryId)
         ) ??
-        layers.find((l) => !l.isCarShell && !l.isContactShadow) ??
+        layers.find((l) => !l.isNameplate3d && !l.isContactShadow) ??
         null
       );
     },
@@ -592,16 +593,13 @@ async function init(): Promise<void> {
           editingContactShadow = false;
           assetsLayerPanel.ensureGroupVisible(modelId);
           editorRuntime.setModel(modelId);
-          const m = manifestDraft.manifest.models.find((x) => x.id === modelId);
-          editorRuntime.setColor(m?.colors[0]?.id ?? "");
-          editorRuntime.setActiveAsset("exterior");
           loadAllAssets(layer);
           currentBookmarkIndex = 0;
           cameraBookmarksPanel.refresh();
           bookmarkNavigator.refresh();
         } else {
           editingContactShadow = true;
-          editingCarShell = false;
+          editingNameplate3d = false;
           selectedBookmarkIdRef = null;
           isEditingBookmarkPivot = false;
           pivotProxy.visible = false;
@@ -618,13 +616,12 @@ async function init(): Promise<void> {
           assetsLayerPanel.setActive(modelId, layer);
           applyGizmoTargetAndMode();
           syncLayerVisibilityFromPanel(modelId);
-          colorBar.refresh();
           transformParamsPanel.refresh();
           contactShadowOpacityInput.value = String(cs?.opacity ?? 0.9);
         }
         return;
       }
-      if (layer.isCarShell) {
+      if (layer.isNameplate3d) {
         const modelChanged = editorRuntime.state.modelId !== modelId;
         if (modelChanged) {
           assetsLayerPanel.ensureGroupVisible(modelId);
@@ -634,7 +631,7 @@ async function init(): Promise<void> {
           cameraBookmarksPanel.refresh();
           bookmarkNavigator.refresh();
         } else {
-          editingCarShell = true;
+          editingNameplate3d = true;
           editingContactShadow = false;
           selectedBookmarkIdRef = null;
           isEditingBookmarkPivot = false;
@@ -642,36 +639,32 @@ async function init(): Promise<void> {
           cameraBookmarksPanel.setSelectedBookmarkId(null);
           cameraBookmarksPanel.refresh();
           bookmarkNavigator.refresh();
-          transformGroupRef = carShellGroup;
+          transformGroupRef = nameplateGroup;
           meshRef = null;
           editorRuntime.setActiveMesh(null);
-          const t = getCarShellTransform();
+          const t = getNameplate3dTransform();
           transformGizmos.setTransform(t);
-          applyCarShellTransform(t);
+          applyNameplate3dTransform(t);
           assetsLayerPanel.setActive(modelId, layer);
           applyGizmoTargetAndMode();
           syncLayerVisibilityFromPanel(modelId);
-          colorBar.refresh();
           transformParamsPanel.refresh();
         }
         return;
       }
-      editingCarShell = false;
+      editingNameplate3d = false;
       editingContactShadow = false;
       const modelChanged = editorRuntime.state.modelId !== modelId;
       if (modelChanged) {
         assetsLayerPanel.ensureGroupVisible(modelId);
         editorRuntime.setModel(modelId);
-        const m = manifestDraft.manifest.models.find((x) => x.id === modelId);
-        editorRuntime.setColor(layer.colorId ?? m?.colors[0]?.id ?? "");
-        editorRuntime.setActiveAsset(layer.assetType);
+        editorRuntime.setActiveLayer(layerToRef(layer));
         loadAllAssets(layer);
         currentBookmarkIndex = 0;
         cameraBookmarksPanel.refresh();
         bookmarkNavigator.refresh();
       } else {
-        editorRuntime.setColor(layer.colorId ?? "");
-        editorRuntime.setActiveAsset(layer.assetType);
+        editorRuntime.setActiveLayer(layerToRef(layer));
         colorRangePanel.clearSelection();
         const ref = assetRefs[layer.url];
         if (ref) {
@@ -679,10 +672,7 @@ async function init(): Promise<void> {
           meshRef = { mesh: ref.mesh };
           transformGizmos.setTarget(ref.group);
           const model = manifestDraft.manifest.models.find((m) => m.id === modelId);
-          const def =
-            layer.assetType === "interior"
-              ? model?.interior
-              : model?.colors.find((c) => c.id === layer.colorId)?.assets[layer.assetType];
+          const def = model ? resolveLayerDef(model, layer) : undefined;
           if (def) {
             transformGizmos.setTransform(def.transform);
             transformGizmos.applyPivotToMesh(ref.mesh, getPivot(def.transform), getPivotRot(def.transform));
@@ -692,7 +682,6 @@ async function init(): Promise<void> {
         assetsLayerPanel.setActive(modelId, layer);
         applyGizmoTargetAndMode();
         syncLayerVisibilityFromPanel(modelId);
-        colorBar.refresh();
       }
     },
     onVisibilityChange: (modelId, layer) => {
@@ -705,7 +694,7 @@ async function init(): Promise<void> {
     return {
       url: CONTACT_SHADOW_LAYER_URL,
       label: "Contact shadow",
-      assetType: "exterior",
+      kind: "base",
       isContactShadow: true,
     };
   }
@@ -731,10 +720,20 @@ async function init(): Promise<void> {
 
   const deg2rad = (d: number) => (d * Math.PI) / 180;
   let dofEnabled = true;
+  /**
+   * `?backdrop=1` — skip the dealership environment entirely (dealership splat,
+   * floor, ceiling, 360 pano background). Only blackdrop + nameplate + fog load.
+   */
+  const backdropOnly = (() => {
+    const v = new URLSearchParams(window.location.search).get("backdrop");
+    return v === "1" || v === "true";
+  })();
   const DEALERSHIP_URL = resolveSplatAssetUrl("/splats/dealership.sog");
   const dealershipGroup = new THREE.Group();
   dealershipGroup.userData.isDealership = true;
-  let dealershipVisible = true;
+  let dealershipVisible = !backdropOnly;
+  /** Whether the dealership env (splat, floor, ceiling, pano) fetch was kicked off. */
+  let dealershipEnvRequested = false;
   let editingDealership = false;
   const DEFAULT_DEALERSHIP_TRANSFORM: TransformDef = { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: 1 };
   const getDealershipTransform = (): TransformDef =>
@@ -796,7 +795,7 @@ async function init(): Promise<void> {
   let editingCeiling = false;
   let updateEditCeilingBtnLabel: () => void = () => {};
 
-  const CHANGAN3D_URL = resolveSplatAssetUrl("/splats/changan3D.glb");
+  const CHANGAN3D_URL = resolveSplatAssetUrl("/splats/foton3d.glb");
   const changan3dGroup = new THREE.Group();
   changan3dGroup.userData.isChangan3D = true;
   let editingChangan3D = false;
@@ -1051,7 +1050,7 @@ async function init(): Promise<void> {
         ...(Number.isFinite(max) ? { maxDistance: max } : {}),
       };
     },
-    getVisibility: (a) => assetsLayerPanel.getVisibilityByAssetType(editorRuntime.state.modelId, a),
+    getVisibility: (k) => assetsLayerPanel.getVisibilityByKind(editorRuntime.state.modelId, k),
     onAdd: (name, pos, target, visibility, constraints, dof, lens) => {
       editorRuntime.addCameraBookmark(
         name,
@@ -1095,7 +1094,7 @@ async function init(): Promise<void> {
     },
     onSelectionChange: (id) => {
       if (id) {
-        editingCarShell = false;
+        editingNameplate3d = false;
         editingContactShadow = false;
       }
       if (editingDealership && id) {
@@ -1151,25 +1150,23 @@ async function init(): Promise<void> {
       bookmarkViewportStage = "edit";
       applyCameraViewport(bm, "edit");
       const modelId = editorRuntime.state.modelId;
-      const cid = editorRuntime.state.colorId;
       const fadeLayers = getAssetLayers(modelId)
         .map((layer) => {
           const ref = assetRefs[layer.url];
           if (!ref) return null;
           const fromVisible = ref.group.visible;
-          const toVisible = bookmarkLayerTargetVisible(layer, bm, cid);
+          const toVisible = bookmarkLayerTargetVisible(modelId, layer, bm);
           return { group: ref.group, fromVisible, toVisible };
         })
         .filter(Boolean) as Array<{ group: THREE.Group; fromVisible: boolean; toVisible: boolean }>;
       layerFade.start(fadeLayers, () => {
         for (const layer of getAssetLayers(modelId)) {
-          const toVisible = bookmarkLayerTargetVisible(layer, bm, cid);
+          const toVisible = bookmarkLayerTargetVisible(modelId, layer, bm);
           const persist =
-            layer.assetType === "interior" ||
-            (layer.colorId !== undefined && layer.colorId === cid);
+            !layer.isNameplate3d && !layer.isContactShadow && layer.kind !== "accessory";
           assetsLayerPanel.setVisibility(modelId, layer, toVisible, persist);
         }
-        applyBookmarkColorMask(modelId);
+        applyBookmarkLayerMask(modelId, bm);
       });
       startBookmarkCameraTravel(bm);
       bookmarkNavigator.refresh();
@@ -1230,59 +1227,48 @@ async function init(): Promise<void> {
     const layers = getAssetLayers(modelId);
     for (const layer of layers) {
       const visible = assetsLayerPanel.getVisibility(modelId, layer);
-      if (layer.isCarShell) {
-        carShellGroup.visible = visible && carShellGroup.children.length > 0;
+      if (layer.isNameplate3d) {
+        nameplateGroup.visible = visible && nameplateGroup.children.length > 0;
         continue;
       }
       if (layer.isContactShadow) {
         continue;
       }
       const ref = assetRefs[layer.url];
-      if (ref) ref.group.visible = visible;
+      if (ref) {
+        ref.group.visible = visible;
+        // A bookmark layer fade may have left mesh.opacity at 0 — restore it,
+        // otherwise a re-shown group still renders nothing.
+        ref.mesh.opacity = visible ? 1 : 0;
+      }
     }
     applyContactShadowFromManifest(modelId);
   }
 
-  /** After applying a bookmark: only the active paint color + interior use panel visibility; other colors stay hidden. */
-  function applyBookmarkColorMask(modelId: string): void {
-    const colorId = editorRuntime.state.colorId;
+  /**
+   * After applying a bookmark: base/motor/interior follow the (persisted) panel
+   * visibility; accessories additionally require the bookmark's `accessory` flag.
+   */
+  function applyBookmarkLayerMask(modelId: string, bm: NamedCameraBookmark): void {
     const layers = getAssetLayers(modelId);
     for (const layer of layers) {
-      let visible: boolean;
-      if (layer.isCarShell) {
-        visible = assetsLayerPanel.getVisibility(modelId, layer);
-      } else if (layer.isContactShadow) {
-        visible = assetsLayerPanel.getVisibility(modelId, layer);
-      } else if (layer.assetType === "interior") {
-        visible = assetsLayerPanel.getVisibility(modelId, layer);
-      } else if (layer.assetType === "exterior") {
-        // Shared body across all colors — color-independent.
-        visible = assetsLayerPanel.getVisibility(modelId, layer);
-      } else if (layer.colorId === colorId) {
-        visible = assetsLayerPanel.getVisibility(modelId, layer);
+      const visible =
+        layer.kind === "accessory" && !layer.isNameplate3d && !layer.isContactShadow
+          ? bookmarkLayerTargetVisible(modelId, layer, bm)
+          : assetsLayerPanel.getVisibility(modelId, layer);
+      if (layer.isNameplate3d) {
+        nameplateGroup.visible = visible && nameplateGroup.children.length > 0;
       } else {
-        visible = false;
+        const ref = assetRefs[layer.url];
+        if (ref) {
+          ref.group.visible = visible;
+          ref.mesh.opacity = visible ? 1 : 0;
+        }
       }
-      const ref = assetRefs[layer.url];
-      if (ref) ref.group.visible = visible;
       assetsLayerPanel.setVisibility(modelId, layer, visible, false);
     }
     applyContactShadowFromManifest(modelId);
   }
-
-  const colorBar = createColorBar({
-    getColors: (modelId) => {
-      const m = manifestDraft.manifest.models.find((x) => x.id === modelId);
-      return (m?.colors ?? []).map((c) => ({ id: c.id, name: c.name }));
-    },
-    getModelId: () => editorRuntime.state.modelId,
-    getActiveColorId: () => editorRuntime.state.colorId,
-    onColorSelect: (colorId) => {
-      editorRuntime.setColor(colorId);
-      syncLayerVisibilityFromPanel(editorRuntime.state.modelId);
-      colorBar.refresh();
-    },
-  });
 
   // Bookmark navigator (bottom center overlay)
   const bookmarkNavigator = createBookmarkNavigator({
@@ -1297,25 +1283,23 @@ async function init(): Promise<void> {
         bookmarkViewportStage = "edit";
         applyCameraViewport(bm, "edit");
         const modelId = editorRuntime.state.modelId;
-        const cid = editorRuntime.state.colorId;
         const fadeLayers = getAssetLayers(modelId)
           .map((layer) => {
             const ref = assetRefs[layer.url];
             if (!ref) return null;
             const fromVisible = ref.group.visible;
-            const toVisible = bookmarkLayerTargetVisible(layer, bm, cid);
+            const toVisible = bookmarkLayerTargetVisible(modelId, layer, bm);
             return { group: ref.group, fromVisible, toVisible };
           })
           .filter(Boolean) as Array<{ group: THREE.Group; fromVisible: boolean; toVisible: boolean }>;
         layerFade.start(fadeLayers, () => {
           for (const layer of getAssetLayers(modelId)) {
-            const toVisible = bookmarkLayerTargetVisible(layer, bm, cid);
+            const toVisible = bookmarkLayerTargetVisible(modelId, layer, bm);
             const persist =
-              layer.assetType === "interior" ||
-              (layer.colorId !== undefined && layer.colorId === cid);
+              !layer.isNameplate3d && !layer.isContactShadow && layer.kind !== "accessory";
             assetsLayerPanel.setVisibility(modelId, layer, toVisible, persist);
           }
-          applyBookmarkColorMask(modelId);
+          applyBookmarkLayerMask(modelId, bm);
         });
         startBookmarkCameraTravel(bm);
         bookmarkNavigator.refresh();
@@ -1389,7 +1373,6 @@ async function init(): Promise<void> {
   assetsLayerPanel.el.appendChild(cameraBookmarksPanel.el);
   const bottomOverlay = document.createElement("div");
   bottomOverlay.className = "editor-bottom-overlay";
-  bottomOverlay.appendChild(colorBar.el);
   bottomOverlay.appendChild(bookmarkNavigator.el);
   canvasArea.appendChild(bottomOverlay);
 
@@ -1466,8 +1449,8 @@ async function init(): Promise<void> {
       transformGizmos.setMode(mode);
       return;
     }
-    if (editingCarShell) {
-      transformGizmos.setTarget(carShellGroup);
+    if (editingNameplate3d) {
+      transformGizmos.setTarget(nameplateGroup);
       const mode =
         currentGizmoMode === "pivotTranslate" || currentGizmoMode === "pivotRotate"
           ? "translate"
@@ -1931,8 +1914,8 @@ async function init(): Promise<void> {
               ? getCeilingTransform()
               : editingContactShadow
                 ? getContactShadowTransform()
-                : editingCarShell
-                  ? getCarShellTransform()
+                : editingNameplate3d
+                  ? getNameplate3dTransform()
                   : editorRuntime.getActiveAssetDef()?.transform ?? null,
     onTransformChange: (partial) => {
       if (editingChangan3D) {
@@ -2013,15 +1996,15 @@ async function init(): Promise<void> {
         transformParamsPanel.refresh();
         return;
       }
-      if (editingCarShell) {
+      if (editingNameplate3d) {
         const t: TransformDef = {
-          ...getCarShellTransform(),
+          ...getNameplate3dTransform(),
           ...(partial.pos !== undefined && { pos: partial.pos }),
           ...(partial.rot !== undefined && { rot: partial.rot }),
           ...(partial.scale !== undefined && { scale: partial.scale }),
         };
-        manifestDraft.updateCarShellTransform(editorRuntime.state.modelId, t);
-        applyCarShellTransform(t);
+        manifestDraft.updateNameplate3dTransform(editorRuntime.state.modelId, t);
+        applyNameplate3dTransform(t);
         transformGizmos.setTransform(t);
         transformParamsPanel.refresh();
         return;
@@ -2049,7 +2032,7 @@ async function init(): Promise<void> {
         editingCeiling ||
         editingBlackdrop ||
         editingChangan3D ||
-        editingCarShell ||
+        editingNameplate3d ||
         editingContactShadow
       )
         return;
@@ -2066,7 +2049,7 @@ async function init(): Promise<void> {
         editingCeiling ||
         editingBlackdrop ||
         editingChangan3D ||
-        editingCarShell ||
+        editingNameplate3d ||
         editingContactShadow
       )
         return null;
@@ -2239,9 +2222,18 @@ async function init(): Promise<void> {
   dealershipBtn.title = "Toggle car dealership background";
   dealershipBtn.addEventListener("click", () => {
     dealershipVisible = !dealershipVisible;
+    if (dealershipVisible && !dealershipEnvRequested) {
+      // Started with ?backdrop=1 — the env was never fetched; load it on demand.
+      dealershipEnvRequested = true;
+      void loadDealership();
+      void loadFloor();
+      void loadCeiling();
+      void loadPanoBackground();
+    }
     dealershipGroup.visible = dealershipVisible;
     floorGroup.visible = dealershipVisible;
     ceilingGroup.visible = dealershipVisible;
+    panoGroup.visible = dealershipVisible;
     dealershipBtn.textContent = dealershipVisible ? "Hide dealership" : "Show dealership";
   });
   rightPanel.appendChild(dealershipBtn);
@@ -2257,7 +2249,7 @@ async function init(): Promise<void> {
   editDealershipBtn.addEventListener("click", () => {
     editingDealership = !editingDealership;
     if (editingDealership) {
-      editingCarShell = false;
+      editingNameplate3d = false;
       editingContactShadow = false;
       if (editingFloor) {
         editingFloor = false;
@@ -2309,7 +2301,7 @@ async function init(): Promise<void> {
   editFloorBtn.addEventListener("click", () => {
     editingFloor = !editingFloor;
     if (editingFloor) {
-      editingCarShell = false;
+      editingNameplate3d = false;
       editingContactShadow = false;
       if (editingDealership) {
         editingDealership = false;
@@ -2401,7 +2393,7 @@ async function init(): Promise<void> {
   editCeilingBtn.addEventListener("click", () => {
     editingCeiling = !editingCeiling;
     if (editingCeiling) {
-      editingCarShell = false;
+      editingNameplate3d = false;
       editingContactShadow = false;
       if (editingDealership) {
         editingDealership = false;
@@ -2512,7 +2504,7 @@ async function init(): Promise<void> {
   editBlackdropBtn.addEventListener("click", () => {
     editingBlackdrop = !editingBlackdrop;
     if (editingBlackdrop) {
-      editingCarShell = false;
+      editingNameplate3d = false;
       editingContactShadow = false;
       if (editingDealership) {
         editingDealership = false;
@@ -2555,10 +2547,10 @@ async function init(): Promise<void> {
   editChangan3dBtn.type = "button";
   editChangan3dBtn.className = "changan3d-edit-btn";
   updateEditChangan3dBtnLabel = () => {
-    editChangan3dBtn.textContent = editingChangan3D ? "Done editing Changan 3D" : "Edit Changan 3D";
+    editChangan3dBtn.textContent = editingChangan3D ? "Done editing Foton 3D" : "Edit Foton 3D";
     editChangan3dBtn.title = editingChangan3D
-      ? "Finish editing the Changan 3D GLB transform"
-      : "Edit Changan 3D (visible only while blackdrop is shown)";
+      ? "Finish editing the Foton 3D GLB transform"
+      : "Edit Foton 3D (visible only while blackdrop is shown)";
     editChangan3dBtn.disabled = !blackdropVisible;
   };
   updateEditChangan3dBtnLabel();
@@ -2566,7 +2558,7 @@ async function init(): Promise<void> {
     if (!blackdropVisible) return;
     editingChangan3D = !editingChangan3D;
     if (editingChangan3D) {
-      editingCarShell = false;
+      editingNameplate3d = false;
       editingContactShadow = false;
       if (editingDealership) {
         editingDealership = false;
@@ -2618,7 +2610,7 @@ async function init(): Promise<void> {
   editPanoBtn.addEventListener("click", () => {
     editingPano = !editingPano;
     if (editingPano) {
-      editingCarShell = false;
+      editingNameplate3d = false;
       editingContactShadow = false;
       if (editingDealership) {
         editingDealership = false;
@@ -2699,65 +2691,55 @@ async function init(): Promise<void> {
       if (!res.ok) throw new Error("Splats manifest unavailable");
       const discovered = (await res.json()) as SceneManifest;
       if (!discovered?.models?.length) {
-        alert("No models found in splats folder. Ensure files follow: splats/<modelId>/<modelId>_<color>_ext.sog, _motor.sog, _int.sog");
+        alert(
+          "No models found in splats folder. Ensure files follow: " +
+            "splats/<modelId>/<modelId>.sog (base), <modelId>-<accessory>.sog (accessories), " +
+            "<modelId>-motor.sog, <modelId>-int.sog, <modelId>.glb (3D nameplate)"
+        );
         return;
       }
       const existingById = new Map(manifestDraft.manifest.models.map((m) => [m.id, m]));
-      const merged: typeof manifestDraft.manifest.models = [];
+      const merged: ModelDef[] = [];
+      /** Update URL/fileType from discovery; never clobber an existing transform. */
+      const mergeAsset = (
+        existingAsset: AssetDef | undefined,
+        discAsset: AssetDef | undefined
+      ): AssetDef | undefined => {
+        if (!discAsset) return existingAsset;
+        if (!existingAsset) return discAsset;
+        return {
+          ...existingAsset,
+          url: discAsset.url,
+          ...(discAsset.fileType != null ? { fileType: discAsset.fileType } : {}),
+        };
+      };
       for (const disc of discovered.models) {
         const existing = existingById.get(disc.id);
         if (!existing) {
-          merged.push(disc as (typeof merged)[0]);
+          merged.push(disc);
           continue;
         }
-        // Merge: keep existing transforms/bookmarks but update asset URLs from discovered (picks up new files like hunter-d_white_motor.sog)
-        const mergedModel = { ...existing } as (typeof merged)[0];
-        mergedModel.interior = { ...existing.interior, url: disc.interior.url };
-        const discColorsById = new Map(disc.colors.map((c) => [c.id, c]));
-        const updatedExisting = existing.colors.map((ec) => {
-          const dc = discColorsById.get(ec.id);
-          if (!dc) return ec;
-          return {
-            ...ec,
-            assets: {
-              exterior: {
-                ...ec.assets.exterior,
-                url: dc.assets.exterior.url,
-                ...(dc.assets.exterior.fileType != null
-                  ? { fileType: dc.assets.exterior.fileType }
-                  : {}),
-              },
-              detail: {
-                ...ec.assets.detail,
-                url: dc.assets.detail.url,
-                ...(dc.assets.detail.fileType != null ? { fileType: dc.assets.detail.fileType } : {}),
-              },
-            },
-          };
+        // Merge: keep existing transforms/bookmarks/annotations/contactShadow/nameplate3d,
+        // update asset URLs from discovery, and append newly discovered layers.
+        const mergedModel: ModelDef = { ...existing };
+        mergedModel.base = mergeAsset(existing.base, disc.base) ?? existing.base;
+        const mergedMotor = mergeAsset(existing.motor, disc.motor);
+        if (mergedMotor) mergedModel.motor = mergedMotor;
+        const mergedInterior = mergeAsset(existing.interior, disc.interior);
+        if (mergedInterior) mergedModel.interior = mergedInterior;
+        const existingAccIds = new Set(existing.accessories.map((a) => a.id));
+        const mergedAccessories: AccessoryDef[] = existing.accessories.map((ea) => {
+          const da = disc.accessories.find((a) => a.id === ea.id);
+          if (!da) return ea;
+          return { ...ea, asset: mergeAsset(ea.asset, da.asset) ?? ea.asset };
         });
-        const templateColor =
-          updatedExisting.find((c) => c.id.toLowerCase() === "white") ?? updatedExisting[0];
-        const have = new Set(updatedExisting.map((c) => c.id));
-        const appended: typeof existing.colors = [];
-        for (const dc of disc.colors) {
-          if (have.has(dc.id)) continue;
-          have.add(dc.id);
-          const t = templateColor ?? dc;
-          appended.push({
-            ...dc,
-            assets: {
-              exterior: {
-                ...dc.assets.exterior,
-                transform: t.assets.exterior.transform,
-              },
-              detail: {
-                ...dc.assets.detail,
-                transform: t.assets.detail.transform,
-              },
-            },
-          });
+        for (const da of disc.accessories) {
+          if (!existingAccIds.has(da.id)) mergedAccessories.push(da);
         }
-        mergedModel.colors = sortColorsForShowroom([...updatedExisting, ...appended]);
+        mergedModel.accessories = mergedAccessories;
+        if (!existing.nameplate3d && disc.nameplate3d) {
+          mergedModel.nameplate3d = disc.nameplate3d;
+        }
         merged.push(mergedModel);
       }
       // Sync dealership transform from scene before merge (ensures visual state is persisted on reload)
@@ -2815,18 +2797,25 @@ async function init(): Promise<void> {
         ? manifestDraft.manifest.defaults.modelId
         : merged[0]?.id ?? "";
       const defaultModel = merged.find((m) => m.id === nextModelId);
+      const prevAccessoryId = manifestDraft.manifest.defaults.accessoryId;
+      const nextAccessoryId =
+        prevAccessoryId && defaultModel?.accessories.some((a) => a.id === prevAccessoryId)
+          ? prevAccessoryId
+          : undefined;
       const mergedManifest: SceneManifest = {
         ...manifestDraft.manifest,
         models: merged,
         defaults: {
           ...manifestDraft.manifest.defaults,
           modelId: nextModelId,
-          colorId: resolveDefaultColorIdForModel(
-            defaultModel,
-            manifestDraft.manifest.defaults.colorId
-          ),
+          ...(nextAccessoryId !== undefined
+            ? { accessoryId: nextAccessoryId }
+            : {}),
         },
       };
+      if (nextAccessoryId === undefined) {
+        delete mergedManifest.defaults.accessoryId;
+      }
       const result = validateForExport(mergedManifest);
       if (!result.success && result.errors) {
         alert("Validation failed:\n" + result.errors.join("\n"));
@@ -3163,10 +3152,14 @@ async function init(): Promise<void> {
       );
       const [sx, sy, sz] = getScale(identity);
       transformGroupRef.scale.set(sx, sy, sz);
-      const pivot = getPivot(identity);
-      const pivotRot = getPivotRot(identity);
-      transformGizmos.setTransform(identity);
-      transformGizmos.applyPivotToMesh(meshRef.mesh, pivot, pivotRot);
+      // Re-anchor the gizmo at the splat's center of mass after the reset.
+      const def = editorRuntime.getActiveAssetDef();
+      if (def && transformGroupRef && autoCenterPivot(def, { group: transformGroupRef, mesh: meshRef.mesh })) {
+        manifestDraft.patchManifest(() => {});
+      }
+      const applied = def?.transform ?? identity;
+      transformGizmos.setTransform(applied);
+      transformGizmos.applyPivotToMesh(meshRef.mesh, getPivot(applied), getPivotRot(applied));
       transformParamsPanel.refresh();
     }
   });
@@ -3188,10 +3181,7 @@ async function init(): Promise<void> {
     if (!model) return;
     const layers = getAssetLayers(modelId);
     for (const layer of layers) {
-      const def =
-        layer.assetType === "interior"
-          ? model.interior
-          : model.colors.find((c) => c.id === layer.colorId)?.assets[layer.assetType];
+      const def = resolveLayerDef(model, layer);
       if (!def) continue;
       const ref = assetRefs[layer.url];
       if (!ref) continue;
@@ -3205,11 +3195,14 @@ async function init(): Promise<void> {
       ref.mesh.position.set(-pivot[0], -pivot[1], -pivot[2]);
       ref.mesh.quaternion.set(pivotRot[0], pivotRot[1], pivotRot[2], pivotRot[3]);
     }
-    const { colorId, activeAsset } = editorRuntime.state;
-    const activeLayer =
-      activeAsset === "interior"
-        ? layers.find((l) => l.assetType === "interior")
-        : layers.find((l) => l.colorId === colorId && l.assetType === activeAsset);
+    const { activeLayer: activeLayerRef } = editorRuntime.state;
+    const activeLayer = layers.find(
+      (l) =>
+        !l.isNameplate3d &&
+        !l.isContactShadow &&
+        l.kind === activeLayerRef.kind &&
+        (l.kind !== "accessory" || l.accessoryId === activeLayerRef.accessoryId)
+    );
     const activeRef = activeLayer ? assetRefs[activeLayer.url] : null;
     if (activeRef) {
       const activeDef = editorRuntime.getActiveAssetDef()!;
@@ -3256,10 +3249,10 @@ async function init(): Promise<void> {
     }
   });
 
-  function showLoadErrorToast(assetType: ActiveAssetType, message: string): void {
+  function showLoadErrorToast(layerLabel: string, message: string): void {
     const toast = document.createElement("div");
     toast.className = "editor-load-error-toast";
-    toast.textContent = `Failed to load ${ASSET_LABELS[assetType]}: ${message}`;
+    toast.textContent = `Failed to load ${layerLabel}: ${message}`;
     toast.style.cssText =
       "position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);max-width:90%;padding:0.6rem 1rem;background:#c22;color:#fff;border-radius:6px;font-size:0.85rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.4);";
     document.body.appendChild(toast);
@@ -3283,9 +3276,58 @@ async function init(): Promise<void> {
     return map[ext];
   }
 
+  /** Mean of splat centers in mesh-local space. */
+  function computeSplatCenterOfMass(
+    mesh: import("@sparkjsdev/spark").SplatMesh
+  ): [number, number, number] | null {
+    const packed = mesh.packedSplats;
+    if (!packed) return null;
+    let n = 0;
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    packed.forEachSplat((_i, center) => {
+      sx += center.x;
+      sy += center.y;
+      sz += center.z;
+      n++;
+    });
+    if (n === 0) return null;
+    return [sx / n, sy / n, sz / n];
+  }
+
+  /**
+   * Splat scans rarely center their content at the local origin, which leaves the
+   * gizmo floating off to one side. When a layer has no meaningful stored pivot,
+   * anchor it at the splat's center of mass, shifting `pos` so the model stays put
+   * on screen. Returns true when the transform was modified.
+   */
+  function autoCenterPivot(
+    def: AssetDef,
+    ref: { group: THREE.Group; mesh: import("@sparkjsdev/spark").SplatMesh }
+  ): boolean {
+    const t = def.transform;
+    const p = t.pivot;
+    if (p && (p[0] !== 0 || p[1] !== 0 || p[2] !== 0)) return false;
+    const center = computeSplatCenterOfMass(ref.mesh);
+    if (!center) return false;
+    const [cx, cy, cz] = center;
+    if (cx === 0 && cy === 0 && cz === 0) return false;
+    const [sx, sy, sz] = getScale(t);
+    // world = pos + R·(S∘(pivotRot·x − pivot)); compensate pos for the new pivot.
+    const delta = new THREE.Vector3(cx * sx, cy * sy, cz * sz).applyQuaternion(
+      new THREE.Quaternion(t.rot[0], t.rot[1], t.rot[2], t.rot[3])
+    );
+    t.pivot = [cx, cy, cz];
+    t.pos = [t.pos[0] + delta.x, t.pos[1] + delta.y, t.pos[2] + delta.z];
+    ref.group.position.set(t.pos[0], t.pos[1], t.pos[2]);
+    ref.mesh.position.set(-cx, -cy, -cz);
+    return true;
+  }
+
   async function loadOneAsset(
     assetDef: AssetDef,
-    assetType: ActiveAssetType,
+    layerLabel: string,
     container: THREE.Group
   ): Promise<{ group: THREE.Group; mesh: import("@sparkjsdev/spark").SplatMesh } | null> {
     try {
@@ -3329,9 +3371,9 @@ async function init(): Promise<void> {
 
       return { group: transformGroup, mesh };
     } catch (err) {
-      console.error(`Failed to load ${ASSET_LABELS[assetType]}:`, err);
+      console.error(`Failed to load ${layerLabel}:`, err);
       const msg = err instanceof Error ? err.message : String(err);
-      showLoadErrorToast(assetType, msg);
+      showLoadErrorToast(layerLabel, msg);
       return null;
     }
   }
@@ -3488,7 +3530,7 @@ async function init(): Promise<void> {
     editingBlackdrop = false;
     editingChangan3D = false;
     editingPano = false;
-    editingCarShell = false;
+    editingNameplate3d = false;
     editingContactShadow = false;
     updateEditDealershipBtnLabel();
     updateEditFloorBtnLabel();
@@ -3505,7 +3547,7 @@ async function init(): Promise<void> {
         !(c as THREE.Object3D).userData?.isBlackdrop &&
         !(c as THREE.Object3D).userData?.isChangan3D &&
         !(c as THREE.Object3D).userData?.isPanoBackground &&
-        !(c as THREE.Object3D).userData?.isCarShell &&
+        !(c as THREE.Object3D).userData?.isNameplate3d &&
         !(c as THREE.Object3D).userData?.isContactShadow
     );
     for (const child of toRemove) {
@@ -3526,15 +3568,12 @@ async function init(): Promise<void> {
     if (!model) return;
 
     const layers = getAssetLayers(modelId);
-    const loadLayers = layers.filter((l) => !l.isCarShell && !l.isContactShadow);
+    const loadLayers = layers.filter((l) => !l.isNameplate3d && !l.isContactShadow);
     const settled = await Promise.allSettled(
       loadLayers.map(async (layer) => {
-        const def =
-          layer.assetType === "interior"
-            ? model.interior
-            : model.colors.find((c) => c.id === layer.colorId)?.assets[layer.assetType];
+        const def = resolveLayerDef(model, layer);
         if (!def) return { layer, ref: null };
-        const ref = await loadOneAsset(def, layer.assetType, container);
+        const ref = await loadOneAsset(def, layer.label, container);
         return { layer, ref };
       })
     );
@@ -3545,6 +3584,16 @@ async function init(): Promise<void> {
       }
     }
 
+    // Anchor the gizmo at each splat's center of mass the first time it loads
+    // without a stored pivot (keeps the model visually in place).
+    let pivotsChanged = false;
+    for (const layer of loadLayers) {
+      const ref = assetRefs[layer.url];
+      const def = resolveLayerDef(model, layer);
+      if (ref && def && autoCenterPivot(def, ref)) pivotsChanged = true;
+    }
+    if (pivotsChanged) manifestDraft.patchManifest(() => {});
+
     for (const layer of layers) {
       const ref = assetRefs[layer.url];
       if (ref) {
@@ -3552,67 +3601,64 @@ async function init(): Promise<void> {
       }
     }
 
-    await loadCarShellForModel(modelId);
+    await loadNameplate3dForModel(modelId);
     syncLayerVisibilityFromPanel(modelId);
 
     const preferContactShadow =
       preferredLayer?.isContactShadow === true &&
       assetsLayerPanel.getVisibility(modelId, preferredLayer);
 
-    const preferCarShell =
-      preferredLayer?.isCarShell === true &&
+    const preferNameplate3d =
+      preferredLayer?.isNameplate3d === true &&
       assetsLayerPanel.getVisibility(modelId, preferredLayer) &&
-      carShellGroup.children.length > 0;
+      nameplateGroup.children.length > 0;
 
     const firstVisible: AssetLayerInfo | null = preferContactShadow
       ? preferredLayer!
-      : preferCarShell
+      : preferNameplate3d
       ? preferredLayer!
       : preferredLayer &&
-          !preferredLayer.isCarShell &&
+          !preferredLayer.isNameplate3d &&
           !preferredLayer.isContactShadow &&
           assetRefs[preferredLayer.url] &&
           assetsLayerPanel.getVisibility(modelId, preferredLayer)
         ? preferredLayer
         : layers.find(
             (l) =>
-              !l.isCarShell &&
+              !l.isNameplate3d &&
               !l.isContactShadow &&
               assetsLayerPanel.getVisibility(modelId, l) &&
               assetRefs[l.url]
           ) ??
-          layers.find((l) => !l.isCarShell && !l.isContactShadow) ??
+          layers.find((l) => !l.isNameplate3d && !l.isContactShadow) ??
           null;
 
     if (firstVisible?.isContactShadow) {
       editingContactShadow = true;
-      editingCarShell = false;
+      editingNameplate3d = false;
       transformGroupRef = contactShadowGroup;
       meshRef = null;
       editorRuntime.setActiveMesh(null);
-      editorRuntime.setColor(model.colors[0]?.id ?? "");
-      editorRuntime.setActiveAsset("exterior");
+      editorRuntime.setActiveLayer({ kind: "base" });
       assetsLayerPanel.setActive(modelId, firstVisible);
       const t = getContactShadowTransform();
       transformGizmos.setTransform(t);
       applyContactShadowFromManifest(modelId);
-    } else if (firstVisible?.isCarShell) {
-      editingCarShell = true;
+    } else if (firstVisible?.isNameplate3d) {
+      editingNameplate3d = true;
       editingContactShadow = false;
-      transformGroupRef = carShellGroup;
+      transformGroupRef = nameplateGroup;
       meshRef = null;
       editorRuntime.setActiveMesh(null);
-      editorRuntime.setColor(model.colors[0]?.id ?? "");
-      editorRuntime.setActiveAsset("exterior");
+      editorRuntime.setActiveLayer({ kind: "base" });
       assetsLayerPanel.setActive(modelId, firstVisible);
-      const t = getCarShellTransform();
+      const t = getNameplate3dTransform();
       transformGizmos.setTransform(t);
-      applyCarShellTransform(t);
+      applyNameplate3dTransform(t);
     } else if (firstVisible) {
       editingContactShadow = false;
-      editingCarShell = false;
-      editorRuntime.setColor(firstVisible.colorId ?? model.colors[0]?.id ?? "");
-      editorRuntime.setActiveAsset(firstVisible.assetType);
+      editingNameplate3d = false;
+      editorRuntime.setActiveLayer(layerToRef(firstVisible));
       assetsLayerPanel.setActive(modelId, firstVisible);
       const activeRef = assetRefs[firstVisible.url];
       if (activeRef) {
@@ -3622,7 +3668,7 @@ async function init(): Promise<void> {
       }
     } else {
       editingContactShadow = false;
-      editingCarShell = false;
+      editingNameplate3d = false;
     }
 
     transformGizmos.onTransformChange((transform) => {
@@ -3715,14 +3761,14 @@ async function init(): Promise<void> {
         transformParamsPanel.refresh();
         return;
       }
-      if (editingCarShell) {
+      if (editingNameplate3d) {
         const t: TransformDef = {
           pos: transform.pos,
           rot: transform.rot,
           scale: transform.scale,
         };
-        manifestDraft.updateCarShellTransform(editorRuntime.state.modelId, t);
-        applyCarShellTransform(t);
+        manifestDraft.updateNameplate3dTransform(editorRuntime.state.modelId, t);
+        applyNameplate3dTransform(t);
         transformParamsPanel.refresh();
         return;
       }
@@ -3769,8 +3815,8 @@ async function init(): Promise<void> {
     applyGizmoTargetAndMode();
     if (editingContactShadow) {
       transformGizmos.setTransform(getContactShadowTransform());
-    } else if (editingCarShell) {
-      transformGizmos.setTransform(getCarShellTransform());
+    } else if (editingNameplate3d) {
+      transformGizmos.setTransform(getNameplate3dTransform());
     } else {
       const activeAssetDef = editorRuntime.getActiveAssetDef();
       if (activeAssetDef && transformGroupRef && meshRef) {
@@ -3792,7 +3838,6 @@ async function init(): Promise<void> {
     bookmarkNavigator.refresh();
     assetsLayerPanel.refresh();
     syncLayerVisibilityFromPanel(modelId);
-    colorBar.refresh();
 
     // Frame the camera on the model so it's visible
     const namedBm = model.cameraBookmarks?.[0];
@@ -3808,12 +3853,32 @@ async function init(): Promise<void> {
 
   // Load all assets
   await loadAllAssets();
-  void loadDealership();
-  void loadFloor();
-  void loadCeiling();
+  if (!backdropOnly) {
+    dealershipEnvRequested = true;
+    void loadDealership();
+    void loadFloor();
+    void loadCeiling();
+    void loadPanoBackground();
+  }
   void loadBlackdrop();
   void loadChangan3D();
-  void loadPanoBackground();
+
+  if (import.meta.env.DEV) {
+    // Dev-only introspection hook for automated debugging.
+    (window as unknown as Record<string, unknown>).__editorDebug = {
+      layers: () =>
+        getAssetLayers(editorRuntime.state.modelId).map((l) => ({
+          url: l.url,
+          label: l.label,
+          kind: l.kind,
+          hasRef: !!assetRefs[l.url],
+          groupVisible: assetRefs[l.url]?.group.visible ?? null,
+          meshOpacity: assetRefs[l.url]?.mesh.opacity ?? null,
+          panelVisible: assetsLayerPanel.getVisibility(editorRuntime.state.modelId, l),
+        })),
+      state: () => ({ ...editorRuntime.state }),
+    };
+  }
 
   runtime.startRenderLoop();
 }

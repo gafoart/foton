@@ -9,7 +9,6 @@ import {
   buildSystemContent,
   openaiChatCompletion,
   MODEL_DISPLAY,
-  ALLOWED_MODEL_IDS,
   DEFAULT_OPENAI_MODEL,
   type ModelKnowledge,
 } from "./functions/lib/chatCore.ts";
@@ -172,7 +171,7 @@ export function chatDevApiPlugin(appRoot: string): Plugin {
         let models: ModelKnowledge[];
         try {
           changanKb = fs.readFileSync(path.join(knowledgeDir, "changan.txt"), "utf8");
-          models = [...ALLOWED_MODEL_IDS]
+          models = [...new Set([...Object.keys(MODEL_DISPLAY), modelId])]
             .map((id) => {
               try {
                 const kb = fs.readFileSync(path.join(knowledgeDir, `${id}.txt`), "utf8");

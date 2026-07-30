@@ -15,7 +15,7 @@ if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [ ! -t 1 ]; then
   exit 1
 fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUCKET="${R2_BUCKET:-spark-viewer-splats}"
+BUCKET="${R2_BUCKET:-foton}"
 CORS_FILE="$ROOT/config/r2-cors.json"
 
 cd "$ROOT"

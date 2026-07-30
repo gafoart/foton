@@ -18,7 +18,7 @@ export class AnnotationSystem {
   private viewMode: ViewMode = "exterior";
   /** When set (presentation mode), filter annotations by these visible views instead of viewMode. */
   private visibleViews: Record<ViewMode, boolean> | null = null;
-  private bookmarks: Record<ViewMode, CameraBookmark> | null = null;
+  private bookmarks: Partial<Record<ViewMode, CameraBookmark>> | null = null;
   private pinsContainer: HTMLElement | null = null;
   private rafId: number | null = null;
   private onFocusBookmark?: (bookmark: CameraBookmark) => void;
@@ -41,7 +41,9 @@ export class AnnotationSystem {
     this.visibleViews = visibility;
   }
 
-  setBookmarks(bookmarks: Record<ViewMode, CameraBookmark> | null): void {
+  setBookmarks(
+    bookmarks: Partial<Record<ViewMode, CameraBookmark>> | null
+  ): void {
     this.bookmarks = bookmarks;
   }
 
@@ -117,8 +119,9 @@ export class AnnotationSystem {
     const bookmarkId = pin.dataset.bookmarkId;
     if (!bookmarkId || !this.bookmarks || !this.onFocusBookmark) return;
     const view = bookmarkId as ViewMode;
-    if (view in this.bookmarks) {
-      this.onFocusBookmark(this.bookmarks[view]);
+    const bm = this.bookmarks[view];
+    if (bm) {
+      this.onFocusBookmark(bm);
     }
   }
 }

@@ -1,6 +1,6 @@
 # Cloudflare Pages — editor SPA (sin Functions). Monorepo: si conectas Git, usa este archivo como "Wrangler configuration".
-# URL típica: https://spark-viewer-editor.pages.dev
+# URL típica: https://foton-editor.pages.dev
 
-name = "spark-viewer-editor"
+name = "foton-editor"
 compatibility_date = "2024-09-23"
 pages_build_output_dir = "dist"
