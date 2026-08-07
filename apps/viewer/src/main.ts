@@ -3408,7 +3408,10 @@ async function init(): Promise<void> {
       : undefined
   );
   urlLoadScope = urlOpts.loadScope;
-  hideNameplate3dGlbWhenDealership = urlOpts.showDealership;
+  // Hide per-model nameplates only in the PURE dealership showroom (?dealer=1
+  // alone). In the default composition the backdrop is present and the
+  // nameplates belong to the scene.
+  hideNameplate3dGlbWhenDealership = urlOpts.showDealership && !urlOpts.showBackdrop;
 
   /**
    * Resolve the bookmark + viewMode to restore. Precedence:

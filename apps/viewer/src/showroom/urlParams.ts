@@ -138,11 +138,15 @@ export function resolveShowroomUrlParams(
   let showDealership: boolean;
   let showBackdrop: boolean;
   if (!hasDealerParam && !hasBackdropParam) {
-    // Scene composition is independent of quality tier: iPhones/iPads keep
-    // desktop-quality splats but still load the blackdrop here.
+    /**
+     * FOTON default composition: the blackdrop (+ brand 3D, fog) ALWAYS loads —
+     * it's the scene the editor authors. Desktop additionally loads the
+     * dealership environment layers (floor/ceiling/pano; the legacy dealership
+     * splat 404s harmlessly if absent). Lightweight devices skip those extras.
+     */
     const lightweight = prefersLightweightScene();
     showDealership = !lightweight;
-    showBackdrop = lightweight;
+    showBackdrop = true;
   } else {
     showDealership = hasDealerParam && params.get("dealer") === "1";
     showBackdrop = hasBackdropParam && params.get("backdrop") === "1";
