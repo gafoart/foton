@@ -200,6 +200,13 @@ export const sceneManifestSchema = z.object({
             .optional(),
         })
         .optional(),
+      nameplateMatcap: z
+        .object({
+          enabled: z.boolean().optional(),
+          url: z.string().min(1).optional(),
+          brightness: z.number().min(0).max(4).optional(),
+        })
+        .optional(),
     })
     .optional(),
 });

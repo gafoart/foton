@@ -12,6 +12,7 @@ import {
   applySceneFog,
   applyBlackdropTint,
   applyChangan3DTint,
+  applyNameplateMatcapFromOptions,
   readChangan3DDefaultTintHex,
   applyFloorBrightness,
   applyCeilingBrightness,
@@ -521,6 +522,10 @@ async function init(): Promise<void> {
         }
       });
       applyNameplate3dTransform(getNameplate3dTransformForModel(modelId));
+      void applyNameplateMatcapFromOptions(
+        nameplateGroup,
+        manifestDraft.manifest.scene?.nameplateMatcap
+      );
       if (!nameplateGroup.parent) {
         runtime.getSplatContainer().add(nameplateGroup);
       }
@@ -854,6 +859,9 @@ async function init(): Promise<void> {
       manifestDraft.manifest.blackdrop?.tintStrength
     );
     applyChangan3DTint(changan3dGroup, manifestDraft.manifest.changan3D?.tint);
+    const matcap = manifestDraft.manifest.scene?.nameplateMatcap;
+    void applyNameplateMatcapFromOptions(changan3dGroup, matcap);
+    void applyNameplateMatcapFromOptions(nameplateGroup, matcap);
     applyFloorBrightness(floorGroup, manifestDraft.manifest.floor?.brightness);
     applyCeilingBrightness(ceilingGroup, manifestDraft.manifest.ceiling?.brightness);
   };
@@ -3474,6 +3482,10 @@ async function init(): Promise<void> {
       applyChangan3DTransform(getChangan3DTransform());
       changan3dGroup.visible = blackdropVisible;
       applyChangan3DTint(changan3dGroup, manifestDraft.manifest.changan3D?.tint);
+      void applyNameplateMatcapFromOptions(
+        changan3dGroup,
+        manifestDraft.manifest.scene?.nameplateMatcap
+      );
       runtime.getSplatContainer().add(changan3dGroup);
       // Now that base colors are cached, seed the color picker to the effective
       // (15%-lighter) default if no explicit tint has been set yet.

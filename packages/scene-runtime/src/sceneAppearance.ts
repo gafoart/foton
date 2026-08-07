@@ -156,8 +156,14 @@ export function applyChangan3DTint(
         mm.color.copy(base).multiplyScalar(CHANGAN3D_DEFAULT_LIGHTEN);
       }
     };
-    if (Array.isArray(o.material)) o.material.forEach(applyOne);
-    else applyOne(o.material);
+    // While the matcap effect is active the visible material is a swap-in;
+    // tint state must live on the ORIGINAL material (the matcap pass mirrors
+    // it). See applyNameplateMatcap.
+    const target =
+      (o.userData._matcapOriginalMaterial as THREE.Material | THREE.Material[] | undefined) ??
+      o.material;
+    if (Array.isArray(target)) target.forEach(applyOne);
+    else applyOne(target);
   });
 }
 
@@ -173,7 +179,10 @@ export function readChangan3DDefaultTintHex(
   let hex: string | null = null;
   root.traverse((o) => {
     if (hex || !(o instanceof THREE.Mesh)) return;
-    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    const src =
+      (o.userData._matcapOriginalMaterial as THREE.Material | THREE.Material[] | undefined) ??
+      o.material;
+    const m = Array.isArray(src) ? src[0] : src;
     const mm = m as THREE.MeshStandardMaterial | undefined;
     const base = (mm?.userData?.[CHANGAN3D_BASE_KEY] as THREE.Color) ?? mm?.color;
     if (!base) return;
@@ -214,6 +223,109 @@ function applyMeshAlbedoBrightness(
     if (Array.isArray(o.material)) o.material.forEach(applyOne);
     else applyOne(o.material);
   });
+}
+
+/** Manifest shape for the nameplate matcap effect (see @changan/shared). */
+export interface NameplateMatcapOptions {
+  enabled?: boolean;
+  url?: string;
+  brightness?: number;
+}
+
+/** Bundled default matcap — shipped in both apps' `public/matcaps/`. */
+export const DEFAULT_NAMEPLATE_MATCAP_URL = "/matcaps/metal.png";
+
+const MATCAP_ORIGINAL_KEY = "_matcapOriginalMaterial";
+
+const matcapTextureCache = new Map<string, Promise<THREE.Texture>>();
+
+/** Load (and cache) a matcap texture. Accepts app paths and data URLs. */
+export function loadMatcapTexture(url: string): Promise<THREE.Texture> {
+  let p = matcapTextureCache.get(url);
+  if (!p) {
+    p = new THREE.TextureLoader().loadAsync(url).then((tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    });
+    p.catch(() => matcapTextureCache.delete(url));
+    matcapTextureCache.set(url, p);
+  }
+  return p;
+}
+
+/**
+ * Swap every mesh material under `root` for a MeshMatcapMaterial using
+ * `texture` (metallic look independent of scene lights). Pass `null` to
+ * restore the original materials. The original material is kept on
+ * `mesh.userData` so toggling is lossless; the matcap material's color is
+ * the tint system's output (see {@link applyChangan3DTint}) times
+ * `brightness`, so tint + matcap compose.
+ */
+export function applyNameplateMatcap(
+  root: THREE.Object3D,
+  texture: THREE.Texture | null,
+  opts?: { brightness?: number }
+): void {
+  const b =
+    opts?.brightness === undefined || !Number.isFinite(opts.brightness)
+      ? 1
+      : Math.max(0, Math.min(4, opts.brightness));
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    if (texture) {
+      if (!o.userData[MATCAP_ORIGINAL_KEY]) {
+        o.userData[MATCAP_ORIGINAL_KEY] = o.material;
+      }
+      const original = o.userData[MATCAP_ORIGINAL_KEY] as
+        | THREE.Material
+        | THREE.Material[];
+      const source = Array.isArray(original) ? original[0] : original;
+      const srcColor =
+        source && "color" in source
+          ? (source as THREE.MeshStandardMaterial).color
+          : null;
+      let mat = o.material as THREE.MeshMatcapMaterial;
+      if (!(mat instanceof THREE.MeshMatcapMaterial)) {
+        mat = new THREE.MeshMatcapMaterial();
+        o.material = mat;
+      }
+      mat.matcap = texture;
+      // Tint chain: the tint system writes to the ORIGINAL material's color
+      // (cached base × tint); mirror it here scaled by brightness.
+      mat.color.copy(srcColor ?? new THREE.Color(0xffffff)).multiplyScalar(b);
+      mat.needsUpdate = true;
+    } else if (o.userData[MATCAP_ORIGINAL_KEY]) {
+      if (o.material instanceof THREE.MeshMatcapMaterial) o.material.dispose();
+      o.material = o.userData[MATCAP_ORIGINAL_KEY] as THREE.Material | THREE.Material[];
+      delete o.userData[MATCAP_ORIGINAL_KEY];
+    }
+  });
+}
+
+/**
+ * Resolve + apply the matcap effect from manifest options. Default state
+ * (no manifest entry) is ENABLED with the bundled metal matcap. Idempotent;
+ * call again after tint changes so the matcap color follows.
+ */
+export async function applyNameplateMatcapFromOptions(
+  root: THREE.Object3D,
+  matcap: NameplateMatcapOptions | undefined,
+  resolveUrl?: (url: string) => string
+): Promise<void> {
+  const enabled = matcap?.enabled !== false;
+  if (!enabled) {
+    applyNameplateMatcap(root, null);
+    return;
+  }
+  const rawUrl = matcap?.url || DEFAULT_NAMEPLATE_MATCAP_URL;
+  const url =
+    rawUrl.startsWith("data:") || !resolveUrl ? rawUrl : resolveUrl(rawUrl);
+  try {
+    const tex = await loadMatcapTexture(url);
+    applyNameplateMatcap(root, tex, { brightness: matcap?.brightness });
+  } catch {
+    applyNameplateMatcap(root, null);
+  }
 }
 
 const FLOOR_BRIGHTNESS_BASE_KEY = "_floorBaseColor";

@@ -172,10 +172,24 @@ export interface SceneLightingDef {
   fog?: SceneFogDef;
 }
 
+/**
+ * Metallic matcap for the 3D nameplate GLBs (brand foton3d + per-model
+ * nameplate3d). `url` may be an app path (`/matcaps/metal.png`) or a data URL
+ * uploaded from the editor. Enabled by default with the bundled metal matcap.
+ */
+export interface NameplateMatcapDef {
+  enabled?: boolean;
+  url?: string;
+  /** Multiplier on the matcap color (0..4). Default 1. */
+  brightness?: number;
+}
+
 /** Canvas clear color, lights, and fog — editor + viewer. */
 export interface SceneStyleDef {
   backgroundColor?: string;
   lighting?: SceneLightingDef;
+  /** Matcap effect on nameplate GLBs (brand + per-model). */
+  nameplateMatcap?: NameplateMatcapDef;
 }
 
 export interface SceneManifest {

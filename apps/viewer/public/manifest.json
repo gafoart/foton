@@ -311,8 +311,8 @@
         2.0861477541674462
       ]
     },
-    "tint": "#ffffff",
-    "tintStrength": 0
+    "tint": "#000000",
+    "tintStrength": 0.88
   },
   "changan3D": {
     "transform": {
@@ -332,30 +332,35 @@
         5,
         5
       ]
-    }
+    },
+    "tint": "#ffffff"
   },
   "scene": {
-    "backgroundColor": "#ffffff",
+    "backgroundColor": "#050505",
     "lighting": {
       "ambient": {
         "color": "#ffffff",
-        "intensity": 1.6
+        "intensity": 2
       },
       "directional": {
         "color": "#ffffff",
         "intensity": 1,
         "pos": [
-          6,
+          5.5,
           12,
           8
         ]
       },
       "fog": {
         "enabled": true,
-        "color": "#ffffff",
+        "color": "#424242",
         "near": 8,
         "far": 40
       }
+    },
+    "nameplateMatcap": {
+      "enabled": true,
+      "brightness": 1.65
     }
   }
 }

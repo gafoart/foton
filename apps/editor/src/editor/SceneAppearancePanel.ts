@@ -1,6 +1,35 @@
 import type { SceneManifest } from "@changan/shared";
+import { DEFAULT_NAMEPLATE_MATCAP_URL } from "@changan/scene-runtime";
 
 const BG_DEFAULT = "#0a0a0a";
+
+/** Max side for uploaded matcap images — resized down so the data URL stays small. */
+const MATCAP_UPLOAD_MAX_PX = 512;
+
+/** Read + downscale an image file to a JPEG/PNG data URL that fits the manifest. */
+function fileToMatcapDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error("read failed"));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("not an image"));
+      img.onload = () => {
+        const side = Math.min(MATCAP_UPLOAD_MAX_PX, Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = side;
+        canvas.height = side;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("no 2d context"));
+        // Matcaps are square by convention; stretch non-square inputs.
+        ctx.drawImage(img, 0, 0, side, side);
+        resolve(canvas.toDataURL("image/jpeg", 0.92));
+      };
+      img.src = fr.result as string;
+    };
+    fr.readAsDataURL(file);
+  });
+}
 
 function row(label: string, input: HTMLElement): HTMLDivElement {
   const r = document.createElement("div");
@@ -97,6 +126,92 @@ export function createSceneAppearancePanel(options: {
   npWrap.className = "scene-appearance-sub";
   npWrap.appendChild(row("Nameplates 3D", npInput));
   wrap.appendChild(npWrap);
+
+  // ── Nameplate matcap (metallic) ────────────────────────────────────────────
+  const mcEn = document.createElement("input");
+  mcEn.type = "checkbox";
+  mcEn.id = "scene-matcap-enabled";
+  const mcPreview = document.createElement("img");
+  mcPreview.className = "scene-appearance-matcap-preview";
+  mcPreview.alt = "matcap";
+  const mcUpload = document.createElement("input");
+  mcUpload.type = "file";
+  mcUpload.accept = "image/*";
+  mcUpload.style.display = "none";
+  const mcUploadBtn = document.createElement("button");
+  mcUploadBtn.type = "button";
+  mcUploadBtn.className = "scene-appearance-btn";
+  mcUploadBtn.textContent = "Subir imagen…";
+  const mcResetBtn = document.createElement("button");
+  mcResetBtn.type = "button";
+  mcResetBtn.className = "scene-appearance-btn";
+  mcResetBtn.textContent = "Metal por defecto";
+  const mcBright = document.createElement("input");
+  mcBright.type = "range";
+  mcBright.min = "0";
+  mcBright.max = "2";
+  mcBright.step = "0.05";
+  mcBright.className = "scene-appearance-range";
+  const mcBrightLbl = document.createElement("span");
+  mcBrightLbl.className = "scene-appearance-range-val";
+
+  const mcChange = (mut: (mc: NonNullable<NonNullable<SceneManifest["scene"]>["nameplateMatcap"]>) => void) => {
+    onPatch((m) => {
+      m.scene ??= {};
+      m.scene.nameplateMatcap ??= {};
+      mut(m.scene.nameplateMatcap);
+    });
+    applyVisuals();
+    refresh();
+  };
+  mcEn.addEventListener("change", () => mcChange((mc) => { mc.enabled = mcEn.checked; }));
+  mcUploadBtn.addEventListener("click", () => mcUpload.click());
+  mcUpload.addEventListener("change", async () => {
+    const file = mcUpload.files?.[0];
+    mcUpload.value = "";
+    if (!file) return;
+    try {
+      const dataUrl = await fileToMatcapDataUrl(file);
+      mcChange((mc) => {
+        mc.url = dataUrl;
+        mc.enabled = true;
+      });
+    } catch {
+      alert("No se pudo leer la imagen.");
+    }
+  });
+  mcResetBtn.addEventListener("click", () =>
+    mcChange((mc) => {
+      delete mc.url;
+      mc.enabled = true;
+    })
+  );
+  mcBright.addEventListener("input", () => {
+    mcBrightLbl.textContent = Number(mcBright.value).toFixed(2);
+    mcChange((mc) => { mc.brightness = parseFloat(mcBright.value); });
+  });
+
+  const mcWrap = document.createElement("div");
+  mcWrap.className = "scene-appearance-sub";
+  const mcTitle = document.createElement("div");
+  mcTitle.className = "scene-appearance-subtitle";
+  mcTitle.textContent = "Matcap metálico (nameplates)";
+  mcWrap.appendChild(mcTitle);
+  const mcEnRow = document.createElement("div");
+  mcEnRow.className = "scene-appearance-row";
+  const mcEnLbl = document.createElement("label");
+  mcEnLbl.htmlFor = "scene-matcap-enabled";
+  mcEnLbl.textContent = "Activar matcap";
+  mcEnRow.append(mcEn, mcEnLbl);
+  mcWrap.appendChild(mcEnRow);
+  mcWrap.appendChild(row("Imagen", mcPreview));
+  const mcBtnRow = document.createElement("div");
+  mcBtnRow.className = "scene-appearance-row";
+  mcBtnRow.append(mcUploadBtn, mcResetBtn, mcUpload);
+  mcWrap.appendChild(mcBtnRow);
+  mcWrap.appendChild(row("Brillo", mcBright));
+  mcWrap.appendChild(mcBrightLbl);
+  wrap.appendChild(mcWrap);
 
   const ambColor = document.createElement("input");
   ambColor.type = "color";
@@ -274,6 +389,13 @@ export function createSceneAppearancePanel(options: {
       fog?.color && /^#[0-9a-fA-F]{6}$/.test(fog.color) ? fog.color : BG_DEFAULT;
     fogNear.value = String(fog?.near ?? 8);
     fogFar.value = String(fog?.far ?? 40);
+
+    const mc = sc?.nameplateMatcap;
+    mcEn.checked = mc?.enabled !== false;
+    mcPreview.src = mc?.url || DEFAULT_NAMEPLATE_MATCAP_URL;
+    const mb = mc?.brightness ?? 1;
+    mcBright.value = String(mb);
+    mcBrightLbl.textContent = mb.toFixed(2);
   }
 
   refresh();

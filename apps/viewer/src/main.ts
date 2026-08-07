@@ -14,6 +14,7 @@ import {
   applySceneFog,
   applyBlackdropTint,
   applyChangan3DTint,
+  applyNameplateMatcapFromOptions,
   applyFloorBrightness,
   applyCeilingBrightness,
 } from "@changan/scene-runtime";
@@ -331,6 +332,11 @@ async function loadNameplate3dForModel(modelId: string): Promise<void> {
     if (npDef?.tint) {
       applyChangan3DTint(nameplate3dGroup, npDef.tint);
     }
+    // Metallic matcap (applied after tint so the matcap color mirrors it).
+    void applyNameplateMatcapFromOptions(
+      nameplate3dGroup,
+      manifest?.scene?.nameplateMatcap
+    );
     if (!nameplate3dGroup.parent) {
       runtime.getSplatContainer().add(nameplate3dGroup);
     }
@@ -456,6 +462,8 @@ function syncViewerSceneLook(): void {
   );
   applyBlackdropTint(blackdropGroup, manifest.blackdrop?.tint, manifest.blackdrop?.tintStrength);
   applyChangan3DTint(changan3dGroup, manifest.changan3D?.tint);
+  void applyNameplateMatcapFromOptions(changan3dGroup, manifest.scene?.nameplateMatcap);
+  void applyNameplateMatcapFromOptions(nameplate3dGroup, manifest.scene?.nameplateMatcap);
   applyFloorBrightness(floorGroup, manifest.floor?.brightness);
   applyCeilingBrightness(ceilingGroup, manifest.ceiling?.brightness);
 }
@@ -623,6 +631,10 @@ async function loadChangan3D(): Promise<void> {
     // Paint the nameplates (15% lighter default, or the manifest tint override)
     // now that the meshes exist — syncViewerSceneLook ran before this load.
     applyChangan3DTint(changan3dGroup, manifest?.changan3D?.tint);
+    void applyNameplateMatcapFromOptions(
+      changan3dGroup,
+      manifest?.scene?.nameplateMatcap
+    );
     runtime.getSplatContainer().add(changan3dGroup);
   } catch (err) {
     console.warn("Foton 3D GLB failed to load:", err);
