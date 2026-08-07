@@ -375,17 +375,22 @@ function isEnvironmentBackdropChild(obj: THREE.Object3D): boolean {
  * texture on its inside (BackSide) and `depthWrite: false` so it doesn't occlude content.
  * Renders behind everything via a low renderOrder.
  */
+/**
+ * Same fallback the editor uses when the manifest doesn't declare a pano:
+ * the bundled 360 at a 50-unit radius. The fully-fogged distant sphere is
+ * what fills the void beyond the blackdrop with the soft fog color.
+ */
+const DEFAULT_PANO_DEF = {
+  url: "/splats/pano_bg.jpg",
+  transform: {
+    pos: [0, 0, 0] as [number, number, number],
+    rot: [0, 0, 0, 1] as [number, number, number, number],
+    scale: [50, 50, 50] as [number, number, number],
+  },
+};
+
 async function loadPanoBackground(): Promise<void> {
-  const def = manifest?.panoBackground;
-  if (!def) {
-    while (panoGroup.children.length > 0) {
-      const c = panoGroup.children[0]!;
-      panoGroup.remove(c);
-      disposeObject3DSubtree(c);
-    }
-    panoLoadedUrl = "";
-    return;
-  }
+  const def = manifest?.panoBackground ?? DEFAULT_PANO_DEF;
 
   const url = resolveSplatAssetUrl(def.url);
   if (url === panoLoadedUrl && panoGroup.children.length > 0) {
@@ -405,7 +410,7 @@ async function loadPanoBackground(): Promise<void> {
       disposeObject3DSubtree(c);
     }
 
-    const brightness = def.brightness ?? 1;
+    const brightness = ("brightness" in def ? def.brightness : undefined) ?? 1;
     // Unit sphere — group `scale` controls effective radius (gizmo-tunable).
     const geom = new THREE.SphereGeometry(1, 64, 32);
     const mat = new THREE.MeshBasicMaterial({
@@ -431,8 +436,7 @@ async function loadPanoBackground(): Promise<void> {
 }
 
 function applyPanoTransform(): void {
-  const def = manifest?.panoBackground;
-  if (!def) return;
+  const def = manifest?.panoBackground ?? DEFAULT_PANO_DEF;
   const t = def.transform;
   panoGroup.position.set(t.pos[0], t.pos[1], t.pos[2]);
   panoGroup.quaternion.set(t.rot[0], t.rot[1], t.rot[2], t.rot[3]);
@@ -3508,6 +3512,9 @@ async function init(): Promise<void> {
   if (urlOpts.showBackdrop) {
     await loadBlackdrop();
     await loadChangan3D();
+    // The fog composition needs the (fully fogged) pano sphere behind the
+    // blackdrop; idempotent when the dealership boot already loaded it.
+    await loadPanoBackground();
   }
 
   const state = stateStore.getState();
