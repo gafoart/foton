@@ -230,6 +230,516 @@
         }
       ],
       "annotations": []
+    },
+    {
+      "id": "12t",
+      "name": "Foton 12T",
+      "base": {
+        "url": "/splats/12t/12t.sog",
+        "fileType": "zip",
+        "transform": {
+          "pos": [
+            0.23820245367987905,
+            2.0869163590736624,
+            -6.12445338725265
+          ],
+          "rot": [
+            0.007709678509132909,
+            -0.00015061659453925757,
+            -0.019531733193977885,
+            0.9997795004751632
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "pivot": [
+            0.23820245367987905,
+            0.3120706666344551,
+            -8.809821245452946
+          ]
+        }
+      },
+      "accessories": [],
+      "motor": {
+        "url": "/splats/12t/12t-motor.sog",
+        "fileType": "zip",
+        "transform": {
+          "pos": [
+            0.09448661011919679,
+            1.9021223019248512,
+            -5.366322388514324
+          ],
+          "rot": [
+            0.018413647065216702,
+            1.1275106969523344e-18,
+            0.9998304544280285,
+            6.122195828526644e-17
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "pivot": [
+            -0.49639399473627943,
+            0.16717309459683077,
+            -8.112019819245038
+          ]
+        }
+      },
+      "interior": {
+        "url": "/splats/12t/12t-int.sog",
+        "fileType": "zip",
+        "transform": {
+          "pos": [
+            0.3468364252576174,
+            2.6703723574652196,
+            -4.7127155584975835
+          ],
+          "rot": [
+            -1,
+            -6.123233995736766e-17,
+            -3.749399456654644e-33,
+            6.123233995736766e-17
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "pivot": [
+            0.06316153752673884,
+            0.21466087953085136,
+            -0.659120389248175
+          ]
+        }
+      },
+      "nameplate3d": {
+        "transform": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "rot": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": 1
+        }
+      },
+      "cameraBookmarks": [
+        {
+          "id": "cb-1790433863663-sb4cnw6",
+          "name": "exterior",
+          "pos": [
+            6.0030881922939,
+            2.0415849720905683,
+            1.6665208647751788
+          ],
+          "target": [
+            -0.4599062133998764,
+            2.196172681763591,
+            -7.022248090145188
+          ],
+          "visibility": {
+            "base": true,
+            "accessory": false,
+            "motor": false,
+            "interior": false
+          },
+          "azimuthMin": -180,
+          "azimuthMax": 180,
+          "polarMin": 85,
+          "polarMax": 90,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 8,
+          "maxDistance": 12
+        },
+        {
+          "id": "cb-1790433894443-y8jpben",
+          "name": "motor",
+          "pos": [
+            1.6494172022698879,
+            3.169494045578359,
+            -6.580911155643206
+          ],
+          "target": [
+            0.1136764110999639,
+            1.7606014680506556,
+            -5.200142555433672
+          ],
+          "visibility": {
+            "base": false,
+            "accessory": false,
+            "motor": true,
+            "interior": false
+          },
+          "azimuthMin": 90,
+          "azimuthMax": -90,
+          "polarMin": 10,
+          "polarMax": 60,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 2.5,
+          "maxDistance": 4
+        },
+        {
+          "id": "cb-1790433941765-3fixeeo",
+          "name": "interior",
+          "pos": [
+            0.958924398927062,
+            3.0628810970911458,
+            -4.99355334611587
+          ],
+          "target": [
+            0.619203789888695,
+            2.045671137099806,
+            -3.305396420623154
+          ],
+          "visibility": {
+            "base": false,
+            "accessory": false,
+            "motor": false,
+            "interior": true
+          },
+          "azimuthMin": -180,
+          "azimuthMax": 180,
+          "polarMin": 0,
+          "polarMax": 180,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 0,
+          "cameraMode": "freelook"
+        },
+        {
+          "id": "cb-1790434335222-zixhmd6",
+          "name": "interior2",
+          "pos": [
+            -0.31493433761903455,
+            3.0431371244256002,
+            -4.353132348381417
+          ],
+          "target": [
+            1.0490998964201088,
+            2.439929374950709,
+            -5.685630385656776
+          ],
+          "visibility": {
+            "base": false,
+            "accessory": false,
+            "motor": false,
+            "interior": true
+          },
+          "azimuthMin": -180,
+          "azimuthMax": 180,
+          "polarMin": 0,
+          "polarMax": 180,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 0,
+          "cameraMode": "freelook"
+        }
+      ],
+      "annotations": [],
+      "contactShadow": {
+        "transform": {
+          "pos": [
+            0,
+            0.04,
+            0
+          ],
+          "rot": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            2.5,
+            2.5,
+            2.5
+          ],
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "pivotRot": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "opacity": 0.9,
+        "cornerRadius": 0.22,
+        "gradient": {}
+      }
+    },
+    {
+      "id": "chuto",
+      "name": "Foton Chuto",
+      "base": {
+        "url": "/splats/chuto/chuto.sog",
+        "fileType": "zip",
+        "transform": {
+          "pos": [
+            0.44843564335927744,
+            1.7859492892259383,
+            -7.438345912912261
+          ],
+          "rot": [
+            0,
+            0,
+            -0.028782891572458495,
+            0.9995856867486289
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "pivot": [
+            0.44843564335927744,
+            -0.9969420393861944,
+            -9.941692665898753
+          ]
+        }
+      },
+      "accessories": [],
+      "motor": {
+        "url": "/splats/chuto/chuto-motor.sog",
+        "fileType": "zip",
+        "transform": {
+          "pos": [
+            0.46787694238458055,
+            1.9300318430937184,
+            -5.931400167498989
+          ],
+          "rot": [
+            0.05517369340201843,
+            3.378414351095966e-18,
+            0.9984767716659113,
+            6.113906912218205e-17
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "pivot": [
+            -0.9224026825289964,
+            0.2422898287755255,
+            -7.754767712647822
+          ]
+        }
+      },
+      "interior": {
+        "url": "/splats/chuto/chuto-int.sog",
+        "fileType": "zip",
+        "transform": {
+          "pos": [
+            0.8597122543354047,
+            2.9544845983982233,
+            -5.2847168818306125
+          ],
+          "rot": [
+            -1,
+            -6.123233995736766e-17,
+            -3.749399456654644e-33,
+            6.123233995736766e-17
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "pivot": [
+            0.15951071206141218,
+            0.1862480242752685,
+            -0.8205350199084627
+          ]
+        }
+      },
+      "nameplate3d": {
+        "transform": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "rot": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": 1
+        }
+      },
+      "cameraBookmarks": [
+        {
+          "id": "cb-1790434118162-9yfkzo3",
+          "name": "exterior",
+          "pos": [
+            6.0030881922939,
+            2.0415849720905683,
+            1.6665208647751788
+          ],
+          "target": [
+            -0.4599062133998764,
+            2.196172681763591,
+            -7.022248090145188
+          ],
+          "visibility": {
+            "base": true,
+            "accessory": false,
+            "motor": false,
+            "interior": false
+          },
+          "azimuthMin": -180,
+          "azimuthMax": 180,
+          "polarMin": 85,
+          "polarMax": 90,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 8,
+          "maxDistance": 12
+        },
+        {
+          "id": "cb-1790434134241-trec66n",
+          "name": "motor",
+          "pos": [
+            2.101208872421142,
+            3.230916150973881,
+            -6.477547877749807
+          ],
+          "target": [
+            0.3954497052535804,
+            1.7304427478400919,
+            -5.43401290942724
+          ],
+          "visibility": {
+            "base": false,
+            "accessory": false,
+            "motor": true,
+            "interior": false
+          },
+          "azimuthMin": 90,
+          "azimuthMax": -90,
+          "polarMin": 10,
+          "polarMax": 60,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 2.5,
+          "maxDistance": 4
+        },
+        {
+          "id": "cb-1790434166474-bk7958m",
+          "name": "interior",
+          "pos": [
+            1.4352417789891634,
+            3.2118406678387927,
+            -5.591368424813128
+          ],
+          "target": [
+            1.4588856711485076,
+            1.8994841095692552,
+            -4.08234184110743
+          ],
+          "visibility": {
+            "base": false,
+            "accessory": false,
+            "motor": false,
+            "interior": true
+          },
+          "azimuthMin": -180,
+          "azimuthMax": 180,
+          "polarMin": 0,
+          "polarMax": 180,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 0,
+          "cameraMode": "freelook"
+        },
+        {
+          "id": "cb-1790434270814-3o0n5hv",
+          "name": "interior2",
+          "pos": [
+            0.34744073531586084,
+            3.3807281700914675,
+            -4.958287160841682
+          ],
+          "target": [
+            0.6842792673992191,
+            2.2682090117100406,
+            -6.585813174624015
+          ],
+          "visibility": {
+            "base": false,
+            "accessory": false,
+            "motor": false,
+            "interior": true
+          },
+          "azimuthMin": -180,
+          "azimuthMax": 180,
+          "polarMin": 0,
+          "polarMax": 180,
+          "focalDistance": 0,
+          "apertureSize": 0.1,
+          "fov": 60,
+          "minDistance": 0,
+          "cameraMode": "freelook"
+        }
+      ],
+      "annotations": [],
+      "contactShadow": {
+        "transform": {
+          "pos": [
+            0,
+            0.04,
+            0
+          ],
+          "rot": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            2.5,
+            2.5,
+            2.5
+          ],
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "pivotRot": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "opacity": 0.9,
+        "cornerRadius": 0.22,
+        "gradient": {}
+      }
     }
   ],
   "dealership": {

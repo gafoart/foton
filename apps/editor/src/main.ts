@@ -507,6 +507,11 @@ async function init(): Promise<void> {
     try {
       const loader = new GLTFLoader();
       const gltf = await loader.loadAsync(url);
+      if (editorRuntime.state.modelId !== modelId) {
+        // User switched model while this GLB was loading — don't show the wrong nameplate.
+        disposeGlbSubtree(gltf.scene);
+        return;
+      }
       while (nameplateGroup.children.length > 0) {
         const c = nameplateGroup.children[0]!;
         nameplateGroup.remove(c);
@@ -597,6 +602,7 @@ async function init(): Promise<void> {
         if (modelChanged) {
           editingContactShadow = false;
           assetsLayerPanel.ensureGroupVisible(modelId);
+          assetsLayerPanel.resetToBaseOnly(modelId);
           editorRuntime.setModel(modelId);
           loadAllAssets(layer);
           currentBookmarkIndex = 0;
@@ -630,6 +636,7 @@ async function init(): Promise<void> {
         const modelChanged = editorRuntime.state.modelId !== modelId;
         if (modelChanged) {
           assetsLayerPanel.ensureGroupVisible(modelId);
+          assetsLayerPanel.resetToBaseOnly(modelId);
           editorRuntime.setModel(modelId);
           loadAllAssets(layer);
           currentBookmarkIndex = 0;
@@ -662,6 +669,7 @@ async function init(): Promise<void> {
       const modelChanged = editorRuntime.state.modelId !== modelId;
       if (modelChanged) {
         assetsLayerPanel.ensureGroupVisible(modelId);
+        assetsLayerPanel.resetToBaseOnly(modelId, layer);
         editorRuntime.setModel(modelId);
         editorRuntime.setActiveLayer(layerToRef(layer));
         loadAllAssets(layer);
@@ -3333,10 +3341,14 @@ async function init(): Promise<void> {
     return true;
   }
 
+  /** Bumped by every loadAllAssets call; in-flight loads from an older call are discarded. */
+  let assetLoadGeneration = 0;
+
   async function loadOneAsset(
     assetDef: AssetDef,
     layerLabel: string,
-    container: THREE.Group
+    container: THREE.Group,
+    isStale: () => boolean = () => false
   ): Promise<{ group: THREE.Group; mesh: import("@sparkjsdev/spark").SplatMesh } | null> {
     try {
       const fileTypeMap: Record<string, SplatFileType> = {
@@ -3358,8 +3370,13 @@ async function init(): Promise<void> {
         throw new Error(`Failed to fetch: ${res.status} ${fetchUrl}`);
       }
       const bytes = await res.arrayBuffer();
+      if (isStale()) return null;
       const mesh = await runtime.loadSplatFromBytes(bytes, undefined, fileType);
       container.remove(mesh);
+      if (isStale()) {
+        mesh.dispose();
+        return null;
+      }
 
       const t = assetDef.transform;
       const pivot = getPivot(t);
@@ -3575,6 +3592,9 @@ async function init(): Promise<void> {
     for (const k of Object.keys(assetRefs)) delete assetRefs[k];
     colorRangePanel.clearSelection();
 
+    const generation = ++assetLoadGeneration;
+    const isStale = () => generation !== assetLoadGeneration;
+
     const { modelId } = editorRuntime.state;
     const model = manifestDraft.manifest.models.find((m) => m.id === modelId);
     if (!model) return;
@@ -3585,10 +3605,12 @@ async function init(): Promise<void> {
       loadLayers.map(async (layer) => {
         const def = resolveLayerDef(model, layer);
         if (!def) return { layer, ref: null };
-        const ref = await loadOneAsset(def, layer.label, container);
+        const ref = await loadOneAsset(def, layer.label, container, isStale);
         return { layer, ref };
       })
     );
+    // A newer loadAllAssets (e.g. the user switched model again) owns the scene now.
+    if (isStale()) return;
 
     for (const s of settled) {
       if (s.status === "fulfilled" && s.value.ref) {
@@ -3614,6 +3636,7 @@ async function init(): Promise<void> {
     }
 
     await loadNameplate3dForModel(modelId);
+    if (isStale()) return;
     syncLayerVisibilityFromPanel(modelId);
 
     const preferContactShadow =
@@ -3863,7 +3886,8 @@ async function init(): Promise<void> {
     }
   }
 
-  // Load all assets
+  // Load all assets (a model always opens with only its base splat visible)
+  assetsLayerPanel.resetToBaseOnly(editorRuntime.state.modelId);
   await loadAllAssets();
   if (!backdropOnly) {
     dealershipEnvRequested = true;

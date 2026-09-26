@@ -110,6 +110,7 @@ export function createAssetsLayerPanel(options: {
   getVisibility: (modelId: string, layer: AssetLayerInfo) => boolean;
   getVisibilityByKind: (modelId: string, kind: SplatLayerKind) => boolean;
   ensureGroupVisible: (modelId: string) => void;
+  resetToBaseOnly: (modelId: string, alsoShow?: AssetLayerInfo) => void;
   refresh: () => void;
   refreshVisibility: () => void;
 } {
@@ -341,9 +342,30 @@ export function createAssetsLayerPanel(options: {
     }
   }
 
+  /** Persist splat-layer visibility as "base only" (plus `alsoShow`, e.g. the row the
+   *  user clicked). Nameplate / contact-shadow rows keep their stored state. */
+  function resetToBaseOnly(modelId: string, alsoShow?: AssetLayerInfo): void {
+    const vis = loadVisibility(modelId);
+    for (const layer of getAssetLayers(modelId)) {
+      if (layer.isNameplate3d || layer.isContactShadow) continue;
+      const visible = layer.kind === "base" || layer.url === alsoShow?.url;
+      vis[layer.url] = visible;
+      const state = rowsByModel[modelId]?.[layer.url];
+      if (state) {
+        state.visible = visible;
+        state.eyeBtn.innerHTML = visible
+          ? '<span class="eye-icon" aria-hidden="true">👁</span>'
+          : '<span class="eye-icon eye-hidden" aria-hidden="true">👁</span>';
+        state.eyeBtn.title = visible ? "Hide" : "Show";
+      }
+    }
+    saveVisibility(modelId, vis);
+  }
+
   return {
     el: leftPanelWrapper,
     ensureGroupVisible,
+    resetToBaseOnly,
     setActive: (modelId: string, layer: AssetLayerInfo) => {
       activeModelId = modelId;
       activeLayer = layer;
